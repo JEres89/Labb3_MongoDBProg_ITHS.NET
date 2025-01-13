@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.HighPerformance;
-using Labb2_CsProg_ITHS.NET.Backend;
-using Labb2_CsProg_ITHS.NET.Elements;
+using Labb3_MongoDBProg_ITHS.NET.Backend;
+using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Microsoft.VisualBasic;
 using System;
 using System.Collections;
@@ -10,7 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Labb2_CsProg_ITHS.NET.Game;
+namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class Level 
 {
     public int Width { get; private set; }

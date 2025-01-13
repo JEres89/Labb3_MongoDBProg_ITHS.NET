@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.HighPerformance;
-using Labb2_CsProg_ITHS.NET.Elements;
-using Labb2_CsProg_ITHS.NET.Game;
+using Labb3_MongoDBProg_ITHS.NET.Elements;
+using Labb3_MongoDBProg_ITHS.NET.Game;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace Labb2_CsProg_ITHS.NET.Files;
+namespace Labb3_MongoDBProg_ITHS.NET.Files;
 internal static class LevelReader
 {
 	internal static async Task<Level> GetLevel(int level)

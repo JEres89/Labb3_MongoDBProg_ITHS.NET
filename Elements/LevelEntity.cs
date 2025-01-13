@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Labb2_CsProg_ITHS.NET.Backend;
-using Labb2_CsProg_ITHS.NET.Game;
-using static Labb2_CsProg_ITHS.NET.Game.CombatProvider;
+using Labb3_MongoDBProg_ITHS.NET.Backend;
+using Labb3_MongoDBProg_ITHS.NET.Game;
+using static Labb3_MongoDBProg_ITHS.NET.Game.CombatProvider;
 
-namespace Labb2_CsProg_ITHS.NET.Elements;
+namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal abstract class LevelEntity : LevelElement
 {
 	public int ViewRange { get; protected set; }

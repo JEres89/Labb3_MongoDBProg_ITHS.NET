@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Labb2_CsProg_ITHS.NET.Game;
+namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class Dice
 {
     private static Random _random = new();

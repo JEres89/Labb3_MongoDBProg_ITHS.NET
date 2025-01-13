@@ -1,11 +1,11 @@
-﻿using Labb2_CsProg_ITHS.NET.Elements;
+﻿using Labb3_MongoDBProg_ITHS.NET.Elements;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Labb2_CsProg_ITHS.NET.Game;
+namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal static class CombatProvider
 {
 

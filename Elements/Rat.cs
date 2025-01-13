@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Labb2_CsProg_ITHS.NET.Game;
+using Labb3_MongoDBProg_ITHS.NET.Game;
 
-namespace Labb2_CsProg_ITHS.NET.Elements;
+namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class Rat : LevelEntity
 {
 	public const int RatHealth = 20;

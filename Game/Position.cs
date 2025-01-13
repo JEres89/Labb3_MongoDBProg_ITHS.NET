@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Labb2_CsProg_ITHS.NET.Game;
+namespace Labb3_MongoDBProg_ITHS.NET.Game;
 
 /// <summary>
 /// Note: The order of the X and Y values are reversed from the usual (X, Y) to (Y, X) to match the order of 2D arrays.

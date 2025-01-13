@@ -1,8 +1,8 @@
-﻿using Labb2_CsProg_ITHS.NET.Backend;
-using Labb2_CsProg_ITHS.NET.Files;
-using Labb2_CsProg_ITHS.NET.Game;
+﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
+using Labb3_MongoDBProg_ITHS.NET.Files;
+using Labb3_MongoDBProg_ITHS.NET.Game;
 
-namespace Labb2_CsProg_ITHS.NET;
+namespace Labb3_MongoDBProg_ITHS.NET;
 
 internal class Program
 {

@@ -1,6 +1,6 @@
-﻿using Labb2_CsProg_ITHS.NET.Backend;
-using Labb2_CsProg_ITHS.NET.Elements;
-using Labb2_CsProg_ITHS.NET.Files;
+﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
+using Labb3_MongoDBProg_ITHS.NET.Elements;
+using Labb3_MongoDBProg_ITHS.NET.Files;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Labb2_CsProg_ITHS.NET.Game;
+namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class GameLoop
 {
     internal static GameLoop Instance { get; private set; }

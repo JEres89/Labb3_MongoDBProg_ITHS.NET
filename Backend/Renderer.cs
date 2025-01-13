@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Labb2_CsProg_ITHS.NET.Game;
+using Labb3_MongoDBProg_ITHS.NET.Game;
 
-namespace Labb2_CsProg_ITHS.NET.Backend;
+namespace Labb3_MongoDBProg_ITHS.NET.Backend;
 internal class Renderer
 {
     public static Renderer Instance { get; private set; } = new();
