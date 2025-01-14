@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MongoDB.Bson;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -175,7 +176,19 @@ internal record struct Position
         y = Y;
         x = X;
     }
-    //public static Position operator -(Position position) => new (-position.X, -position.Y);
+
+
+	internal BsonArray ToBsonArray()
+    {
+        return new BsonArray { Y , X };
+	}
+
+	internal static Position FromBsonDocument(BsonArray doc)
+	{
+		return new(doc[0].AsInt32, doc[1].AsInt32);
+	}
+    
+	//public static Position operator -(Position position) => new (-position.X, -position.Y);
 
 
 }

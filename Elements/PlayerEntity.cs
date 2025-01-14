@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Game;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class PlayerEntity : LevelEntity, IInputEndpoint
@@ -19,6 +21,8 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	public const int PlayerDefenseDieSize = 6;
 	public const int PlayerDefenseDieNum = 1;
 	public const int PlayerDefenseMod = 2;
+
+	[BsonIgnore]
 	public override int MaxHealth => PlayerHealth;
 
 	public new string Name { 
@@ -33,19 +37,13 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 			base.Health = value;
 			UpdateStatusText(); }
 	}
-	public int Turn
-	{
-		get => turn;
-		protected set
-		{
-			turn = value;
-			UpdateStatusText();
-		}
-	}
+
+	[BsonIgnore]
 	public bool StatusChanged { get; private set; }
 	string statusText = default!;
 	int turn = 0;
 
+	[BsonIgnore]
 	public bool WillAct { get; set; }
 
 	private ConsoleKeyInfo pressedKey;
@@ -66,6 +64,9 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 
 		//UpdateStatusText();
 	}
+	/// <summary>
+	/// TODO: Change into a static formatstring
+	/// </summary>
 	private void UpdateStatusText()
 	{
 		StatusChanged = true;
@@ -105,7 +106,8 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		pressedKey = default;
 		if (HasActed)
 		{
-			Turn++;
+			turn = CurrentLevel.Turn+1;
+			UpdateStatusText();
 		}
 	}
 
@@ -136,7 +138,8 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		if (collisionTarget is Wall)
 		{
 			Health -= 1;
-			currentLevel.Renderer.AddLogLine("You bump your nose into a wall, taking 1 damage.", ConsoleColor.Yellow);
+			currentLevel.Renderer.AddLogLine("You bump your nose into a wall, taking 1 Damage.", ConsoleColor.Yellow);
+			HasActed = true;
 		}
 	}
 
@@ -167,4 +170,28 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		handler.AddKeyListener(ConsoleKey.DownArrow, this);
 		handler.AddKeyListener(ConsoleKey.RightArrow, this);
 	}
+
+	//public override BsonDocument ToBsonDocument()
+	//{
+	//	var doc = new BsonDocument
+	//	{
+	//		{ "Id", Id },
+	//		{ "Type", nameof(PlayerEntity) },
+	//		{ "Pos", Pos.ToBsonArray() },
+	//		{ "Stats", new BsonArray(new int[]
+	//			{
+	//				Health,
+	//				AttackDieSize,
+	//				AttackDieNum,
+	//				AttackMod,
+	//				DefenseDieSize,
+	//				DefenseDieNum,
+	//				DefenseMod
+	//			})
+	//		},
+	//		{ "Name", Name },
+	//		{ "Turn", Turn }
+	//	};
+	//	return doc;
+	//}
 }

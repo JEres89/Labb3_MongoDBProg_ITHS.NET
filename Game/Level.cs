@@ -2,9 +2,11 @@
 using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Microsoft.VisualBasic;
+using MongoDB.Bson.Serialization.Attributes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
@@ -15,8 +17,15 @@ internal class Level
 {
     public int Width { get; private set; }
     public int Height { get; private set; }
+    public int Turn { get; private set; }
 
-    public PlayerEntity Player { get; private set; }
+	//[BsonElement("Player")]
+	public PlayerEntity Player { get; private set; }
+    public List<Position>? Walls { get; private set; }
+    public ReadOnlyCollection<LevelEntity> Enemies => new(_enemies);
+    public ReadOnlyMemory2D<bool> Discovered => new(_discovered);
+
+    [BsonIgnore]
     internal Renderer Renderer => Renderer.Instance;
 
 	private LevelElement?[,] _elements;
@@ -27,14 +36,34 @@ internal class Level
 
     internal Level(ReadOnlySpan2D<LevelElement?> levelData, List<LevelEntity> enemies, PlayerEntity player)
     {
+		// levelData should be in a contigous memory block so we can use Span to quickly find the wall positions for the MongoDB serializer.
+		if(levelData.TryGetSpan(out ReadOnlySpan<LevelElement?> span))
+		{
+			Walls = new(levelData.Width*levelData.Height);
 
-        Width = levelData.Width;
+			for(int i = 0; i < span.Length; i++)
+			{
+				if(span[i] is Wall w)
+				{
+					Walls.Add(w.Pos);
+				}
+			}
+			Walls.TrimExcess();
+		}
+
+		Width = levelData.Width;
         Height = levelData.Height;
         _elements = levelData.ToArray();
         _discovered = new bool[Height, Width];
         _enemies = enemies;
 
         Player = player;
+    }
+
+	[BsonConstructor]
+    public Level()
+    {
+        
     }
 
     internal void Clear()
@@ -249,10 +278,11 @@ internal class Level
 		List<LevelElement> movedElements = new();
 
         if (Player.HasActed)
-        {
-            UpdateDiscoveredAndPlayerView(true);
+		{
+			Turn++;
+			UpdateDiscoveredAndPlayerView(true);
 
-            for (int i = 0; i < _enemies.Count; i++)
+			for (int i = 0; i < _enemies.Count; i++)
             {
 				LevelEntity enemy = _enemies[i];
 				if (!enemy.HasActed)

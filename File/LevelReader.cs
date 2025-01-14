@@ -24,6 +24,16 @@ internal static class LevelReader
 			_ => throw new ArgumentException("Invalid level number", nameof(level))
 		};
 	}
+	internal static string ReadAsString(int level)
+	{
+		return File.ReadAllText(level switch
+		{
+			1 => ".\\Levels\\Level1.txt",
+			//2 => ".\\Levels\\Level2.txt",
+			//3 => ".\\Levels\\Level3.txt",
+			_ => throw new ArgumentException("Invalid level number", nameof(level))
+		});
+	}
 	internal static async Task<Level> ReadLevel(string path)
 	{
 		// Read the file and create a Level object

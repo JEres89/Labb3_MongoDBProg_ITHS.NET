@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Labb3_MongoDBProg_ITHS.NET.Game;
+using MongoDB.Bson;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class Rat : LevelEntity
@@ -96,14 +97,12 @@ internal class Rat : LevelEntity
 
 	internal override (char c, ConsoleColor fg, ConsoleColor bg) GetRenderData(bool isDiscovered, bool isInView)
 	{
-
 		char c = isInView ? IsDead ? '¤' : Symbol : ' ';
 		ConsoleColor fg = isInView ? ForegroundVisibleRat : DiscoveredRat;
 		ConsoleColor bg = isInView ? BackroundVisibleRat : DiscoveredRat;
 
 		return (c, fg, bg);
 	}
-
 	public static ConsoleColor ForegroundVisibleRat { get; } = ConsoleColor.Red;
 	public static ConsoleColor BackroundVisibleRat { get; } = ConsoleColor.Gray;
 	public static ConsoleColor DiscoveredRat { get; } = ConsoleColor.DarkGray;
@@ -119,4 +118,26 @@ internal class Rat : LevelEntity
 		}
 		else base.Consume(entity);
 	}
+
+	//public override BsonDocument ToBsonDocument()
+	//{
+	//	var doc = new BsonDocument
+	//	{
+	//		{ "Id", Id },
+	//		{ "Type", nameof(Rat) },
+	//		{ "Pos", Pos.ToBsonArray() },
+	//		{ "Stats", new BsonArray(new int[]
+	//			{
+	//				Health,
+	//				AttackDieSize,
+	//				AttackDieNum,
+	//				AttackMod,
+	//				DefenseDieSize,
+	//				DefenseDieNum,
+	//				DefenseMod
+	//			})
+	//		}
+	//	};
+	//	return doc;
+	//}
 }

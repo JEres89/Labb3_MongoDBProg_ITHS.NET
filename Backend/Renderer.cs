@@ -96,7 +96,24 @@ internal class Renderer
 	{
 		_statusBar = text;
 		List<(string text, ConsoleColor textColor)> lines = new();
-		CreateLines(text, ConsoleColor.White, lines, statusBarWidth);
+		
+		if(text.Length > statusBarWidth)
+		{
+			if(text.IndexOf('.') < statusBarWidth)
+			{
+				var split = text.Split('.', 2, StringSplitOptions.TrimEntries);
+				lines.Add((split[0], ConsoleColor.White));
+				lines.Add((split[1], ConsoleColor.White));
+			}
+			else
+			{
+				CreateLines(text, ConsoleColor.White, lines, statusBarWidth);
+			}
+		}
+		else
+		{
+			lines.Add((text, ConsoleColor.White));
+		}
 		int yOffset = lines.Count < statusBarHeight ? 1 : 0;
 		for (int i = 0; i < lines.Count; i++)
 		{

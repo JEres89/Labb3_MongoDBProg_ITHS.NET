@@ -1,26 +1,42 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Game;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 using static Labb3_MongoDBProg_ITHS.NET.Game.CombatProvider;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
-internal abstract class LevelEntity : LevelElement
+
+[BsonDiscriminator(RootClass = true)]
+[BsonKnownTypes(typeof(Snake), typeof(Rat), typeof(PlayerEntity))]
+internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument*/
 {
-	public int ViewRange { get; protected set; }
+	[BsonId]
+    public int Id { get; protected set; }
+
 	public virtual int Health { get; protected set; }
-    public abstract int MaxHealth { get; }
-    public int AttackDieSize { get; protected set; }
+	public int AttackDieSize { get; protected set; }
 	public int AttackDieNum { get; protected set; }
 	public int AttackMod { get; protected set; }
 	public int DefenseDieSize { get; protected set; }
 	public int DefenseDieNum { get; protected set; }
 	public int DefenseMod { get; protected set; }
 
+	[BsonIgnore]
+    public static int NextEntityId { get; private set; }
+	[BsonIgnore]
+	public int ViewRange { get; protected set; }
+	[BsonIgnore]
+    public abstract int MaxHealth { get; }
+
+	[BsonIgnore]
 	public bool HasActed { get; set; }
+	[BsonIgnore]
 	public bool IsDead { get => Health <= 0; }
 
 	protected readonly Alignment alignment;
@@ -123,12 +139,12 @@ internal abstract class LevelEntity : LevelElement
 		if (collisionTarget is LevelEntity enemy)
 		{
 			bool isPlayer = this is PlayerEntity;
-			var attack = Attack(this, enemy);
-			var counter = enemy.AttackedBy(currentLevel, this, attack);
+			var attack = Attack(this, enemy, currentLevel.Turn);
+			bool enemyCounters = enemy.AttackedBy(currentLevel, this, attack, out var counter);
 			currentLevel.Renderer.AddLogLine(attack.GenerateCombatMessage(), isPlayer ? ConsoleColor.DarkGreen : ConsoleColor.Red);
-			if (counter.defender == this)
+			if (enemyCounters)
 			{
-				Health -= counter.damage;
+				Health -= counter!.Damage;
 				currentLevel.Renderer.AddLogLine(counter.GenerateCombatMessage(), isPlayer ? ConsoleColor.Red : ConsoleColor.DarkGreen);
 			}
 			HasActed = true;
@@ -155,17 +171,19 @@ internal abstract class LevelEntity : LevelElement
 	}
 
 
-	internal CombatResult AttackedBy(Level currentLevel, LevelEntity attacker, CombatResult attackResult)
+	internal bool AttackedBy(Level currentLevel, LevelEntity attacker, CombatResult attackResult, [NotNullWhen(true)] out CombatResult? counter)
 	{
-		Health -= attackResult.damage;
+		Health -= attackResult.Damage;
 		if(Health <= 0)
 		{
 			HasActed = true;
 			DeathEffect(currentLevel, attacker);
-			return attackResult;
+			counter = null;
+			return false;
 		}
 
-		return Attack(this, attacker);
+		counter = Attack(this, attacker, currentLevel.Turn);
+		return true;
 	}
 	protected virtual void DeathEffect(Level currentLevel, LevelEntity attacker) {}
 	internal void Loot(Level currentLevel, LevelEntity entity)
@@ -197,6 +215,8 @@ internal abstract class LevelEntity : LevelElement
 		DefenseDieSize++;
 		DefenseMod++;
 	}
+
+	//public abstract BsonDocument ToBsonDocument();
 
 	internal enum Alignment
 	{
