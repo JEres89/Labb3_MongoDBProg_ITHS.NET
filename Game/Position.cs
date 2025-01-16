@@ -1,4 +1,5 @@
 ﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,8 +15,8 @@ namespace Labb3_MongoDBProg_ITHS.NET.Game;
 /// </summary>
 internal record struct Position
 {
-    internal int Y { get; set; }
-    internal int X { get; set; }
+    public int Y { get; set; }
+    public int X { get; set; }
 
     internal static Position Up = new(-1, 0);
     internal static Position Left = new(0, -1);
@@ -44,7 +45,8 @@ internal record struct Position
     {
         return _random.Next(2) == 0;
 	}
-	internal Position(int y, int x)
+    [BsonConstructor]
+	public Position(int y, int x)
 	{
 		Y = y;
 		X = x;
@@ -178,15 +180,15 @@ internal record struct Position
     }
 
 
-	internal BsonArray ToBsonArray()
-    {
-        return new BsonArray { Y , X };
-	}
+	//internal BsonArray ToBsonArray()
+ //   {
+ //       return new BsonArray { Y , X };
+	//}
 
-	internal static Position FromBsonDocument(BsonArray doc)
-	{
-		return new(doc[0].AsInt32, doc[1].AsInt32);
-	}
+	//internal static Position FromBsonDocument(BsonArray doc)
+	//{
+	//	return new(doc[0].AsInt32, doc[1].AsInt32);
+	//}
     
 	//public static Position operator -(Position position) => new (-position.X, -position.Y);
 

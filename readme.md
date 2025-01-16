@@ -46,16 +46,30 @@ För VG ska ytterligare två funktioner implementeras i spelet (och lagras i Mon
 All classes which should be saved to the database needs to be prepared for serialization. 
 Applying attributes to the classes and properties to control which and how they are serialized and deserialized.
 
-Changes:
+While trying to keep the changes to existing code reasonably few this is what I have arrived at:
 - Add Id field to LevelEntity
-- Moved the Turn property from Player to Level (don't know why I put it there in the first place)
+- Add Bson attributes to LevelEntity and all inheriting classes
+	a. BsonDiscriminator and BsonKnownTypes to LevelEntity to handle polymorphism
+	b. BsonId to Id field (note: must be matched as "_id" in filters etc)
+	c. BsonConstructor to most classes since they dont have public setters for properties
+	d. Pos and Symbol from LevelElement works as is
+- Move the Turn property from Player to Level (don't know why I put it there in the first place) so that it will be serialized at the root of the Level document
 - Change CombatResult to store all values needed to generate the message in int arrays
-- Add List<Position> Walls to Level to avoid saving all walls as separate entities since they have no identifying values
-- Add public properties to Level for _enemies and _discovered for MongoDB serialization
-- 
+- Add List<Position> Walls to Level to avoid saving all walls as separate entities since they have no identifying values and populating it at initialization to make use of the span from LevelReader
+- Add public properties to Level for _enemies and _discovered for MongoDB serialization. Because of the lack of information on how MongoDB handles 2D arrays, I will save
+- Add GameMongoClient and a menu to the Program class to handle loading games 
+
+#### 2. Implement MongoDB connection
 
 
+#### 3. Establish format of saved game state in MongoDB
+I will use one collection for a metadata documents in the form of SaveObject, and one separate collection for each save game. 
+The SaveObject will contain some identifying information as well as the name of the collection for the data.
+The collections for savegames will either have a few array-documents with different types of entities, or everything nested in the Level document. 
+Because there won't be any need to access only parts of the data at any one time, I will try the latter first.
 
+
+#### 4. Implement saving and loading game state
 
 
 

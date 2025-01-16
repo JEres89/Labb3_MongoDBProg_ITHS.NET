@@ -9,19 +9,21 @@ namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 
 internal class Wall : LevelElement
 {
-	private const string logMessage = "Wall is walling.";
+	private const string NAME = "Wall";
+	private const string DESCRIPTION = "A solid stone wall";
+	private const string LOG_MESSAGE = "Wall is walling.";
+	public new string Name { get => NAME; set { } } 
+	public new string Description { get => DESCRIPTION; set { } } 
 	internal Wall(Position p, char symbol)
 	{
 		Pos = p;
 		Symbol = symbol;
-		Name = "Wall";
-		Description = "A solid stone wall.";
 		ObscuresVision = true;
 	}
 
 	internal override void Update(Level CurrentLevel)
 	{
-		CurrentLevel.Renderer.AddLogLine(logMessage);
+		CurrentLevel.Renderer.AddLogLine(LOG_MESSAGE);
 	}
 
 

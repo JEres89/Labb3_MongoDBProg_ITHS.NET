@@ -1,4 +1,5 @@
-﻿using Labb3_MongoDBProg_ITHS.NET.Files;
+﻿using Labb3_MongoDBProg_ITHS.NET.Elements;
+using Labb3_MongoDBProg_ITHS.NET.Files;
 using Labb3_MongoDBProg_ITHS.NET.Game;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -6,18 +7,21 @@ using MongoDB.Driver;
 namespace Labb3_MongoDBProg_ITHS.NET.MongoDB;
 internal class GameMongoClient
 {
-    public static string? DbConnectionString { get; set; }
-    public MongoClient DbClient { get; set; }
+	public static string DbConnectionString { get; set; } = "mongodb://localhost:27017/";
+
+	public MongoClient DbClient { get; set; }
     public List<SaveObject> Saves { get; set; }
     public GameMongoClient()
     {
-       DbClient = new MongoClient(DbConnectionString ??= "mongodb://localhost:27017/");
+       DbClient = new MongoClient(DbConnectionString);
 	}
 
     public void EnsureCreated()
     {
 		var client = DbClient;
 		var db = client.GetDatabase("JensEresund");
+
+		Test();
 		//db.DropCollection("Levels");
 		var collections = db.ListCollectionNames().ToList();
 
@@ -115,6 +119,17 @@ internal class GameMongoClient
 			db.DropCollection(save.SaveCollectionName);
 		}
 
+	}
+
+	private void Test()
+	{
+		var client = DbClient;
+		var db = client.GetDatabase("JensEresund");
+		var test = db.GetCollection<Snake>("TestCollection");
+
+		var snake = new Snake(new Position(1, 1), 's');
+		test.ReplaceOne(new BsonDocument("_id", 0 ), snake, new ReplaceOptions { IsUpsert = true });
+		var snakes = test.Find(new BsonDocument()).ToList();
 	}
 }
 

@@ -1,16 +1,10 @@
 ﻿using CommunityToolkit.HighPerformance;
 using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
-using Microsoft.VisualBasic;
 using MongoDB.Bson.Serialization.Attributes;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class Level 
@@ -19,11 +13,10 @@ internal class Level
     public int Height { get; private set; }
     public int Turn { get; private set; }
 
-	//[BsonElement("Player")]
 	public PlayerEntity Player { get; private set; }
     public List<Position>? Walls { get; private set; }
     public ReadOnlyCollection<LevelEntity> Enemies => new(_enemies);
-    public ReadOnlyMemory2D<bool> Discovered => new(_discovered);
+	public bool[] Discovered => _discovered.AsSpan().ToArray();//.Clone();
 
     [BsonIgnore]
     internal Renderer Renderer => Renderer.Instance;
@@ -61,10 +54,32 @@ internal class Level
     }
 
 	[BsonConstructor]
-    public Level()
+    public Level(int width, int height, int turn, PlayerEntity player, List<Position> walls, List<LevelEntity> enemies, bool[] discovered)
     {
-        
-    }
+		Width = width;
+		Height = height;
+		Turn = turn;
+		Player = player;
+		_elements = new LevelElement?[Height, Width];
+
+		_elements[player.Pos.Y, player.Pos.X] = player;
+
+		foreach (var enemy in enemies)
+		{
+			var (y,x) = enemy.Pos;
+			_elements[y,x] = enemy;
+		}
+		foreach (var wallPos in walls)
+		{
+			var (y, x) = wallPos;
+			_elements[y, x] = new Wall(wallPos, '#');
+		}
+
+		_discovered = new ReadOnlySpan2D<bool>(discovered, height, width).ToArray();
+
+		//Walls = walls;
+		_enemies = enemies;
+	}
 
     internal void Clear()
 	{
