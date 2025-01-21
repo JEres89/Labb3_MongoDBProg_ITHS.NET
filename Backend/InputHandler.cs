@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Labb3_MongoDBProg_ITHS.NET.Backend;
+﻿namespace Labb3_MongoDBProg_ITHS.NET.Backend;
 internal class InputHandler
 {
     public static InputHandler Instance { get; private set; } = new();
@@ -13,6 +6,7 @@ internal class InputHandler
 
     internal Task<ConsoleKeyInfo> InputListener = default!;
     private Dictionary<ConsoleKey, IInputEndpoint> _listeners = new();
+    private Dictionary<ConsoleKeyInfo, IInputEndpoint> _commandListeners = new();
     public bool ReadAllKeys { get; set; } = false;
 
     private bool running = false;
@@ -30,11 +24,16 @@ internal class InputHandler
             k = Console.ReadKey(true);
             if (!running) break;
 
-            if (_listeners.TryGetValue(k.Key, out var listener))
+			// Commands take precedence over regular keys
+			if(_commandListeners.TryGetValue(k, out var listener))
+			{
+				listener.CommandPressed(k);
+			}
+            else if (_listeners.TryGetValue(k.Key, out listener))
             {
-                listener.KeyPressed(k);
+                listener.KeyPressed(k.Key);
             }
-        }
+		}
         return k;
     }
 
@@ -42,9 +41,16 @@ internal class InputHandler
     {
         running = false;
     }
-    internal bool AddKeyListener(ConsoleKey key, IInputEndpoint listener)
+    internal void AddKeyListener(ConsoleKey key, IInputEndpoint listener)
     {
-        return _listeners.TryAdd(key, listener);
+        _listeners[key] = listener;
+    }
+    internal void AddCommandListener(ConsoleKeyInfo command, IInputEndpoint listener)
+    {
+        if(command.Modifiers == 0) 
+            return;
+
+		_commandListeners[command] = listener;
     }
     internal ConsoleKeyInfo AwaitNextKey()
     {

@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Labb3_MongoDBProg_ITHS.NET.Backend;
+﻿using System.Diagnostics.CodeAnalysis;
 using Labb3_MongoDBProg_ITHS.NET.Game;
-using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using static Labb3_MongoDBProg_ITHS.NET.Game.CombatProvider;
+using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 
@@ -27,8 +21,11 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 	public int DefenseDieNum { get; protected set; }
 	public int DefenseMod { get; protected set; }
 
+	/// <summary>
+	/// Id of 1 is reserved for the player.
+	/// </summary>
 	[BsonIgnore]
-    public static int NextEntityId { get; private set; }
+	public static int NextEntityId { get; private set; } = 2;
 	[BsonIgnore]
 	public int ViewRange { get; protected set; }
 	[BsonIgnore]
@@ -40,8 +37,9 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 	public bool IsDead { get => Health <= 0; }
 
 	protected readonly Alignment alignment;
-	internal LevelEntity(Position p, char symbol, Alignment alignment)
+	internal LevelEntity(Position p, char symbol, Alignment alignment, int id = 0)
 	{
+		Id = id == 0 ? NextEntityId++ : id;
 		Pos = p;
 		Symbol = symbol;
 		this.alignment = alignment;
@@ -141,11 +139,12 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 			bool isPlayer = this is PlayerEntity;
 			var attack = Attack(this, enemy, currentLevel.Turn);
 			bool enemyCounters = enemy.AttackedBy(currentLevel, this, attack, out var counter);
-			currentLevel.Renderer.AddLogLine(attack.GenerateCombatMessage(), isPlayer ? ConsoleColor.DarkGreen : ConsoleColor.Red);
+			currentLevel.MessageLog.AddLogMessage(attack);
+
 			if (enemyCounters)
 			{
 				Health -= counter!.Damage;
-				currentLevel.Renderer.AddLogLine(counter.GenerateCombatMessage(), isPlayer ? ConsoleColor.Red : ConsoleColor.DarkGreen);
+				currentLevel.MessageLog.AddLogMessage(counter);
 			}
 			HasActed = true;
 		}
@@ -190,19 +189,18 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 	{
 		if(entity is PlayerEntity player)
 		{
-			currentLevel.Renderer.AddLogLine($"You step in the remains of a fallen {Name}.");
+			currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, STEP_IN_REMAINS, ConsoleColor.White, Name));
 			// Give any loot to the player
 		}
 		else
 		{
 			if (currentLevel.IsInview(Pos))
 			{
-				currentLevel.Renderer.AddLogLine($"You see {entity.Description} consume a fallen {Name} whole, absorbing its power.", ConsoleColor.DarkYellow);
+				currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, CONSUME_NEAR, ConsoleColor.DarkYellow, entity.Description, Name));
 			}
 			else
 			{
-				currentLevel.Renderer.AddLogLine($"You hear a faint crushing of bones and ripping of flesh, somewhere something is having a snack...", ConsoleColor.DarkYellow);
-
+				currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, CONSUME_FAR, ConsoleColor.DarkYellow));
 			}
 			entity.Consume(this);
 		}

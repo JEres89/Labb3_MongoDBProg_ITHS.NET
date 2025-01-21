@@ -1,13 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Labb3_MongoDBProg_ITHS.NET.Game;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
+﻿using Labb3_MongoDBProg_ITHS.NET.Game;
 using MongoDB.Bson.Serialization.Attributes;
-using MongoDB.Bson.Serialization.Serializers;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class Snake : LevelEntity
@@ -40,8 +32,10 @@ internal class Snake : LevelEntity
 	}
 
 	[BsonConstructor]
-	public Snake(int id, Position pos, char symbol, int health, int attackDieSize, int attackDieNum, int attackMod, int defenseDieSize, int defenseDieNum, int defenseMod) : base(pos, symbol, Alignment.Evil)
+	public Snake(int id, Position pos, char symbol, int health, int attackDieSize, int attackDieNum, int attackMod, int defenseDieSize, int defenseDieNum, int defenseMod) : base(pos, symbol, Alignment.Evil, id)
 	{
+		Id = id;
+
 		Name = "Snake";
 		Description = "A slithering, scary reptile.";
 		ViewRange = 1;

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Labb3_MongoDBProg_ITHS.NET.Game;
+﻿using Labb3_MongoDBProg_ITHS.NET.Game;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 
@@ -23,7 +18,7 @@ internal class Wall : LevelElement
 
 	internal override void Update(Level CurrentLevel)
 	{
-		CurrentLevel.Renderer.AddLogLine(LOG_MESSAGE);
+		//CurrentLevel.Renderer.AddLogLine(LOG_MESSAGE);
 	}
 
 

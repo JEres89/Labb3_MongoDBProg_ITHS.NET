@@ -1,23 +1,27 @@
 ﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Labb3_MongoDBProg_ITHS.NET.Files;
-using System;
-using System.Collections.Generic;
+using Labb3_MongoDBProg_ITHS.NET.MongoDB;
+using MongoDB.Bson;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
-internal class GameLoop
+internal class GameLoop : IInputEndpoint
 {
+	private static readonly ConsoleKeyInfo _saveCommand = new('S', ConsoleKey.S, false, false, true);
+    private const ConsoleKey _scrollUpKey = ConsoleKey.PageUp;
+    private const ConsoleKey _scrollDownKey = ConsoleKey.PageDown;
+
+    private bool _saveRequested = false;
+    private int _levelStart;
+
     internal static GameLoop Instance { get; private set; }
     internal Renderer Renderer { get; private set; }
-
-    private int _levelStart;
-    internal Level CurrentLevel { get; private set; }
     internal InputHandler input = InputHandler.Instance;
+    internal Level CurrentLevel { get; private set; }
     internal PlayerEntity Player => CurrentLevel.Player;
+    public ObjectId? CurrentGame { get; private set; }
+
 
     public GameLoop(int levelStart, string? player)
     {
@@ -27,6 +31,11 @@ internal class GameLoop
         CurrentLevel = LevelReader.GetLevel(levelStart).Result;
         Player.SetName(player ?? string.Empty);
     }
+    public GameLoop(SaveObject save, Level level)
+    {
+		CurrentGame = save.Id;
+        CurrentLevel = level;
+	}
 
     internal void Clear()
     {
@@ -63,6 +72,10 @@ internal class GameLoop
         Renderer.Initialize();
         CurrentLevel.InitMap();
         Player.RegisterKeys(input);
+
+        CurrentGame = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog, null).Result;
+
+        RegisterKeys(input);
     }
 
     private void Loop()
@@ -71,12 +84,12 @@ internal class GameLoop
         Stopwatch tickTimer = new();
         int ticks = 0;
         input.InputListener = Task.Run(input.Start);
-        //Renderer.DeathScreen();
-        while (true)
-        {
-            tickTimer.Restart();
+		//Renderer.DeathScreen();
+		while(true)
+		{
+			tickTimer.Restart();
 
-            Update();
+			Update();
 
 			if (Player.Health <= 0)
 			{
@@ -92,11 +105,16 @@ internal class GameLoop
 			Render();
 
             ticks++;
-            int timeLeft = tickTime - (int)tickTimer.ElapsedMilliseconds;
-            if (timeLeft > 0)
-                Thread.Sleep(timeLeft);
-        }
-    }
+			int timeLeft = tickTime - (int)tickTimer.ElapsedMilliseconds;
+
+			if(_saveRequested)
+			{
+				GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog, null).RunSynchronously();
+			}
+			if(timeLeft > 0)
+				Thread.Sleep(timeLeft);
+		}
+	}
 
     private void Update()
     {
@@ -108,4 +126,32 @@ internal class GameLoop
         CurrentLevel.UpdateRenderer();
         Renderer.Render();
     }
+
+	public void KeyPressed(ConsoleKey key)
+	{
+        switch(key)
+        {
+			case _scrollDownKey:
+				Renderer.LogScrolled(1);
+				break;
+			case _scrollUpKey:
+				Renderer.LogScrolled(-1);
+				break;
+			default:
+                break;
+        }
+    }
+	public void CommandPressed(ConsoleKeyInfo command)
+	{
+		if(command == _saveCommand)
+		{
+            _saveRequested = true;
+		}
+	}
+	public void RegisterKeys(InputHandler handler)
+	{
+		handler.AddCommandListener(_saveCommand, this);
+        handler.AddKeyListener(_scrollDownKey, this);
+        handler.AddKeyListener(_scrollUpKey, this);
+	}
 }

@@ -1,18 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Labb3_MongoDBProg_ITHS.NET.Backend;
+﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Game;
-using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class PlayerEntity : LevelEntity, IInputEndpoint
 {
 
-	public const int PlayerHealth = 100;
+	public const int PlayerMaxHealth = 100;
 
 	public const int PlayerAttackDieSize = 4;
 	public const int PlayerAttackDieNum = 3;
@@ -23,18 +18,19 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	public const int PlayerDefenseMod = 2;
 
 	[BsonIgnore]
-	public override int MaxHealth => PlayerHealth;
-
-	public new string Name { 
-		get => base.Name; 
+	public override int MaxHealth => PlayerMaxHealth;
+	
+	private string PlayerName { 
+		get => Name; 
 		set { 
-			base.Name = value; 
+			Name = value; 
 			UpdateStatusText(); } 
 	}
-	public override int Health { 
-		get => base.Health;
-		protected set {
-			base.Health = value;
+	
+	private int PlayerHealth { 
+		get => Health;
+		set {
+			Health = value;
 			UpdateStatusText(); }
 	}
 
@@ -46,13 +42,13 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	[BsonIgnore]
 	public bool WillAct { get; set; }
 
-	private ConsoleKeyInfo pressedKey;
-	public PlayerEntity(Position p, char symbol) : base(p, symbol, Alignment.Good)
+	private ConsoleKey pressedKey;
+	public PlayerEntity(Position p, char symbol) : base(p, symbol, Alignment.Good, 1)
 	{
-		Name = "";
+		PlayerName = "";
 		Description = "You.";
 		ViewRange = 4;
-		Health = PlayerHealth;
+		PlayerHealth = PlayerMaxHealth;
 		
 		AttackDieSize = PlayerAttackDieSize;
 		AttackDieNum = PlayerAttackDieNum;
@@ -64,13 +60,36 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 
 		//UpdateStatusText();
 	}
+	[BsonConstructor]
+	public PlayerEntity(int id, Position pos, char symbol, int health, int attackDieSize, int attackDieNum, int attackMod, int defenseDieSize, int defenseDieNum, int defenseMod) : base(pos, symbol, Alignment.Good, id)
+	{
+		#if DEBUG
+		if(id != 1)
+			throw new ArgumentException("PlayerEntity Id must be 1");
+		#endif
+
+		Id = id;
+		
+		PlayerName = "";
+		Description = "You.";
+		ViewRange = 4;
+		PlayerHealth = health;
+
+		AttackDieSize = attackDieSize;
+		AttackDieNum = attackDieNum;
+		AttackMod = attackMod;
+
+		DefenseDieSize = defenseDieSize;
+		DefenseDieNum = defenseDieNum;
+		DefenseMod = defenseMod;
+	}
 	/// <summary>
 	/// TODO: Change into a static formatstring
 	/// </summary>
 	private void UpdateStatusText()
 	{
 		StatusChanged = true;
-		statusText = $"{Name}: {Health} HP, {AttackDieNum}d{AttackDieSize}+{AttackMod} ATK, {DefenseDieNum}d{DefenseDieSize}+{DefenseMod} DEF. Has survived a total of {turn} turns!";
+		statusText = $"{PlayerName}: {PlayerHealth} HP, {AttackDieNum}d{AttackDieSize}+{AttackMod} ATK, {DefenseDieNum}d{DefenseDieSize}+{DefenseMod} DEF. Has survived a total of {turn} turns!";
 	}
 	public string GetStatusText()
 	{
@@ -79,14 +98,13 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	}
 	public void SetName(string name)
 	{
-		Name = name;
+		PlayerName = name;
 	}
-
 
 	internal override void Update(Level CurrentLevel)
 	{
 		WillAct = false;
-		Position direction = pressedKey.Key switch
+		Position direction = pressedKey switch
 		{
 			ConsoleKey.A or ConsoleKey.LeftArrow => Position.Left,
 			ConsoleKey.W or ConsoleKey.UpArrow => Position.Up,
@@ -137,8 +155,8 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	{
 		if (collisionTarget is Wall)
 		{
-			Health -= 1;
-			currentLevel.Renderer.AddLogLine("You bump your nose into a wall, taking 1 Damage.", ConsoleColor.Yellow);
+			PlayerHealth -= 1;
+			currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, BUMP_NOSE, ConsoleColor.Yellow));
 			HasActed = true;
 		}
 	}
@@ -148,7 +166,7 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		return (Symbol, ConsoleColor.Blue, ConsoleColor.Gray);
 	}
 
-	public void KeyPressed(ConsoleKeyInfo key)
+	public void KeyPressed(ConsoleKey key)
 	{
 		if (WillAct || HasActed)
 			return;
@@ -169,6 +187,11 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		handler.AddKeyListener(ConsoleKey.LeftArrow, this);
 		handler.AddKeyListener(ConsoleKey.DownArrow, this);
 		handler.AddKeyListener(ConsoleKey.RightArrow, this);
+	}
+
+	public void CommandPressed(ConsoleKeyInfo command)
+	{
+
 	}
 
 	//public override BsonDocument ToBsonDocument()

@@ -2,38 +2,53 @@
 using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
 using MongoDB.Bson.Serialization.Attributes;
-using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
-internal class Level 
+internal class Level
 {
-    public int Width { get; private set; }
+	public int Width { get; private set; }
     public int Height { get; private set; }
     public int Turn { get; private set; }
 
 	public PlayerEntity Player { get; private set; }
     public List<Position>? Walls { get; private set; }
-    public ReadOnlyCollection<LevelEntity> Enemies => new(_enemies);
+    public List<LevelEntity> Enemies => new(_enemies);
 	public bool[] Discovered => _discovered.AsSpan().ToArray();//.Clone();
 
-    [BsonIgnore]
+	internal MessageLog MessageLog => MessageLog.Instance;
+	
     internal Renderer Renderer => Renderer.Instance;
 
+	/// <summary>
+	/// Map grid of the level with all elements.
+	/// </summary>
 	private LevelElement?[,] _elements;
-    private bool[,] _discovered;
-    private HashSet<Position> _playerView = new();
-    private List<LevelEntity> _enemies;
-    private HashSet<Position> _renderUpdateCoordinates = new();
+	/// <summary>
+	/// Map grid overlay of all tiles that have been seen by the player.
+	/// </summary>
+	private bool[,] _discovered;
+	/// <summary>
+	/// What is currently visible to the player.
+	/// </summary>
+	private HashSet<Position> _playerView = new();
+	/// <summary>
+	/// List of all enemies on the level.
+	/// </summary>
+	private List<LevelEntity> _enemies;
+	/// <summary>
+	/// All coordinates which have been changed since previous turn, 
+	/// either by adding or removing it to _playerView or by an entity walking into view.
+	/// </summary>
+	private HashSet<Position> _renderUpdateCoordinates = new();
 
     internal Level(ReadOnlySpan2D<LevelElement?> levelData, List<LevelEntity> enemies, PlayerEntity player)
-    {
+	{
+		Walls = new(levelData.Width*levelData.Height);
 		// levelData should be in a contigous memory block so we can use Span to quickly find the wall positions for the MongoDB serializer.
 		if(levelData.TryGetSpan(out ReadOnlySpan<LevelElement?> span))
 		{
-			Walls = new(levelData.Width*levelData.Height);
-
 			for(int i = 0; i < span.Length; i++)
 			{
 				if(span[i] is Wall w)
@@ -41,8 +56,19 @@ internal class Level
 					Walls.Add(w.Pos);
 				}
 			}
-			Walls.TrimExcess();
 		}
+		// Turns out it's not, because I trim some empty columns atleast in level1.txt, so we have to iterate through the whole thing.
+		else
+		{
+			foreach(var element in levelData)
+			{
+				if(element is Wall w)
+				{
+					Walls.Add(w.Pos);
+				}
+			}
+		}
+		Walls.TrimExcess();
 
 		Width = levelData.Width;
         Height = levelData.Height;
@@ -108,28 +134,30 @@ internal class Level
         HashSet<(int y, int x)> notObscured = new();
 
         int yOffset = Math.Max(pPos.Y - viewRange, 0);
-        int yLength = Math.Min(pPos.Y + viewRange, Height) - yOffset;
+        int yLength = Math.Min(pPos.Y + viewRange, Height-1) - yOffset;
 		int xOffset = Math.Max(pPos.X - viewRange, 0);
-        int xLength = Math.Min(pPos.X + viewRange, Width) - xOffset;
+        int xLength = Math.Min(pPos.X + viewRange, Width-1) - xOffset;
 
         for (int col_row = 0; col_row <= 1; col_row++)
-        {
-            for (int y_x = 0; y_x < 2 * viewRange; y_x++)
+		{
+			int x = col_row * xLength + xOffset;
+			for (int y_x = 0; y_x < 2 * viewRange; y_x++)
 			{
 				int y = yOffset + y_x;
-				int x = col_row * xLength + xOffset;
-				if (yLength > y_x)
+				
+				// the obscure, no pun intended, wrong los tile was solved by adding '=' to these two if statements x_x
+				// it did not include to ray-trace to the bottomright corner
+				if (yLength >= y_x)
 				{
 					FindObscured(y, x, ref obscured, ref notObscured);
 				}
 
-                if (xLength > y_x)
+                if (xLength >= y_x)
 				{
 					FindObscured(col_row * yLength + yOffset, y_x + xOffset, ref obscured, ref notObscured);
 				}
 			}
         }
-
 
 		//HashSet<(int y, int x)> obscured2 = new();
 		//HashSet<(int y, int x)> notObscured2 = new();
@@ -171,10 +199,6 @@ internal class Level
 				_renderUpdateCoordinates.Add(dPos);
 			}
 		}
-		//      foreach (var item in obscured)
-		//      {
-		//          Renderer.AddMapUpdate((new(item.y,item.x), ('X', ConsoleColor.Red, ConsoleColor.Black)));
-		//}
 	}
 	/// <summary>
 	/// Credit goes to James McNeill at http://playtechs.blogspot.com/2007/03/raytracing-on-grid.html
@@ -184,7 +208,6 @@ internal class Level
 	/// <param name="notObscured"></param>
 	private void FindObscured(int yTarget, int xTarget, ref HashSet<(int y, int x)> obscured, ref HashSet<(int y, int x)> notObscured)
 	{
-        List<(int,int)> checkedPositions = new();
 		var (yStart,xStart) = Player.Pos;
 		int dx = Math.Abs(xTarget - xStart);
 		int dy = Math.Abs(yTarget - yStart);
@@ -222,8 +245,19 @@ internal class Level
 					notObscured.Add((y, x));
 				}
 			}
-            checkedPositions.Add((y,x));
+            // If this is the last iteration we do not do anything with the coordinates 
+			if(n == 1) break;
 			if (error > 0)
+			{
+				x += x_inc;
+				error -= dy;
+			}
+			else if(error < 0)
+			{
+				y += y_inc;
+				error += dx;
+			}
+			else if(!(_elements[y, x+x_inc]?.ObscuresVision??false))
 			{
 				x += x_inc;
 				error -= dy;
@@ -294,7 +328,6 @@ internal class Level
 
         if (Player.HasActed)
 		{
-			Turn++;
 			UpdateDiscoveredAndPlayerView(true);
 
 			for (int i = 0; i < _enemies.Count; i++)
@@ -321,6 +354,7 @@ internal class Level
 
 			if (Player.StatusChanged) Renderer.UpdateStatusBar(Player.GetStatusText());
 			Player.HasActed = false;
+			Turn++;
 			return true;
 		}
         if(Player.StatusChanged) Renderer.UpdateStatusBar(Player.GetStatusText());
@@ -390,7 +424,5 @@ internal class Level
             sb.AppendLine();
         }
         return sb.ToString();
-    }
-
-
+	}
 }

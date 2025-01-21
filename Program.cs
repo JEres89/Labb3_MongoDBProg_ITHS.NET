@@ -1,5 +1,4 @@
 ﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
-using Labb3_MongoDBProg_ITHS.NET.Files;
 using Labb3_MongoDBProg_ITHS.NET.Game;
 using Labb3_MongoDBProg_ITHS.NET.MongoDB;
 
@@ -18,7 +17,7 @@ internal class Program
 
 			var mongoClient = new GameMongoClient();
 			mongoClient.EnsureCreated();
-
+			
 			var game = new GameLoop(1, playerName);
 			game.GameStart();
 			playerName = game.Player.Name;
@@ -27,7 +26,7 @@ internal class Program
 
 			Console.ResetColor();
             Console.WriteLine("\n\nYou died on turn " + turn + ".\n\nPress escape to exit or any key to play again.");
-			if(InputHandler.Instance.InputListener.Result.Key == ConsoleKey.Escape)
+			if(InputHandler.Instance.AwaitNextKey().Key == ConsoleKey.Escape)
 			{
 				break;
 			}

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Labb3_MongoDBProg_ITHS.NET.Game;
-using MongoDB.Bson;
+﻿using Labb3_MongoDBProg_ITHS.NET.Game;
+using MongoDB.Bson.Serialization.Attributes;
+using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Elements;
 internal class Rat : LevelEntity
@@ -19,6 +15,7 @@ internal class Rat : LevelEntity
 	public const int RatDefenseDieNum = 1;
 	public const int RatDefenseMod = 0;
 
+	[BsonIgnore]
 	public override int MaxHealth => RatHealth;
 
 	public Rat(Position p, char symbol) : base(p, symbol, Alignment.Evil)
@@ -33,6 +30,24 @@ internal class Rat : LevelEntity
 		DefenseDieSize = RatDefenseDieSize;
 		DefenseDieNum = RatDefenseDieNum;
 		DefenseMod = RatDefenseMod;
+	}
+	[BsonConstructor]
+	public Rat(int id, Position pos, char symbol, int health, int attackDieSize, int attackDieNum, int attackMod, int defenseDieSize, int defenseDieNum, int defenseMod) : base(pos, symbol, Alignment.Evil, id)
+	{
+		Id = id;
+
+		Name = "Rat";
+		Description = "A ragged, oversized, rabid rat.";
+		ViewRange = 2;
+		Health = health;
+
+		AttackDieSize = attackDieSize;
+		AttackDieNum = attackDieNum;
+		AttackMod = attackMod;
+
+		DefenseDieSize = defenseDieSize;
+		DefenseDieNum = defenseDieNum;
+		DefenseMod = defenseMod;
 	}
 
 	internal override void Update(Level currentLevel)
@@ -84,11 +99,12 @@ internal class Rat : LevelEntity
 		if (currentLevel.TryMove(this, direction, out var collision))
 		{
 			Pos = Pos.Move(direction);
-			currentLevel.Renderer.AddLogLine("The rat rolls away from your strike.");
+			currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, ROLL_AWAY, ConsoleColor.White));
 		}
 		else if(collision is Rat rat)
 		{
-			currentLevel.Renderer.AddLogLine("The rat flies away from the force of your blow, straight into the mouth of "+rat.Description);
+			currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, CONSUME_FLY, ConsoleColor.White, rat.Description));
+			
 			rat.Consume(this);
 			currentLevel.RemoveElement(Pos);
 		}

@@ -1,4 +1,5 @@
-﻿using Labb3_MongoDBProg_ITHS.NET.Elements;
+﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
+using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Labb3_MongoDBProg_ITHS.NET.Files;
 using Labb3_MongoDBProg_ITHS.NET.Game;
 using MongoDB.Bson;
@@ -9,11 +10,14 @@ internal class GameMongoClient
 {
 	public static string DbConnectionString { get; set; } = "mongodb://localhost:27017/";
 
+	public static GameMongoClient Instance { get; private set; }
+
 	public MongoClient DbClient { get; set; }
-    public List<SaveObject> Saves { get; set; }
-    public GameMongoClient()
+    public List<SaveObject> Saves { get; set; } = null!;
+	public GameMongoClient()
     {
-       DbClient = new MongoClient(DbConnectionString);
+		DbClient = new MongoClient(DbConnectionString);
+		Instance = this;
 	}
 
     public void EnsureCreated()
@@ -21,7 +25,7 @@ internal class GameMongoClient
 		var client = DbClient;
 		var db = client.GetDatabase("JensEresund");
 
-		Test();
+		//Test();
 		//db.DropCollection("Levels");
 		var collections = db.ListCollectionNames().ToList();
 
@@ -50,41 +54,50 @@ internal class GameMongoClient
 		}
 	}
 
-	public void SaveGame(Level level, ObjectId? id)
+	public async Task<ObjectId> SaveGame(Level level, MessageLog log, ObjectId? id)
 	{
 		var client = DbClient;
 		IMongoDatabase db = client.GetDatabase("JensEresund");
-		SaveObject? save = null;
-		if(id != null)
-		{
-			save = GetSave(db, id.Value);
-		}
-
-		save??=new SaveObject(level.Player.Name);
-
-
+		SaveObject save = GetSave(db, id, level.Player.Name);
 		
+		save.Turn = level.Turn;
 
-		//var levelData = db.GetCollection<Level>();
-		//levelData.InsertOne(level);
+		var collectionAsLevel = db.GetCollection<Level>(save.SaveCollectionName, new() { AssignIdOnInsert = false});
+		if(collectionAsLevel.CountDocuments(new BsonDocument()) > 0)
+		{
+			var result = collectionAsLevel.DeleteMany(new BsonDocument());
+		}
+		await collectionAsLevel.InsertOneAsync(level);
+
+		var collectionAsLog = db.GetCollection<MessageLog>(save.SaveCollectionName, new() { AssignIdOnInsert = false });
+		if(collectionAsLog.CountDocuments(new BsonDocument()) > 0)
+		{
+			var result = collectionAsLog.DeleteMany(new BsonDocument());
+		}
+		await collectionAsLog.InsertOneAsync(log);
+
+		return save.Id;
 	}
 
-	private SaveObject? GetSave(IMongoDatabase db, ObjectId id)
+	private SaveObject GetSave(IMongoDatabase db, ObjectId? id, string name)
 	{
-		FilterDefinition<SaveObject> asd = new BsonDocumentFilterDefinition<SaveObject>(new("Id", id));
-		var saves = db.GetCollection<SaveObject>("Saves").Find(asd);
-		if(saves.CountDocuments() > 0)
+		if(id == null)
 		{
-			return saves.First();
+			var save = new SaveObject(name);
+			db.GetCollection<SaveObject>("Saves").InsertOne(save);
+			Saves.Add(save);
+			return save;
 		}
 
-		return null;
+		return 
+			Saves.Find(s => s.Id == id)??
+			db.GetCollection<SaveObject>("Saves").Find(new BsonDocument("Id", id)).First();
 	}
 
 	private void UpdateSave(IMongoDatabase db, SaveObject save)
 	{
 		var saves = db.GetCollection<SaveObject>("Saves");
-		saves.ReplaceOne(new BsonDocumentFilterDefinition<SaveObject>(new("Id", save.Id)), save);
+		saves.ReplaceOne(new BsonDocument("Id", save.Id), save);
 	}
 
 	private ObjectId CreateNewSave(IMongoDatabase db, SaveObject save)
@@ -95,13 +108,13 @@ internal class GameMongoClient
 	}
 	private SaveObject? DeleteSave(IMongoDatabase db, ObjectId id)
 	{
-		var filter = Builders<SaveObject>.Filter.Eq("Id", id); //new BsonDocumentFilterDefinition<SaveObject>(new("Id", id));
+		var filter = new BsonDocument("Id", id);
 		var saves = db.GetCollection<SaveObject>("Saves");
 		var save = saves.Find(filter).First();
 		if(save != null)
 		{
 			save.IsDead = true;
-			saves.UpdateOne(filter, Builders<SaveObject>.Update.Set("IsDead", true));
+			saves.UpdateOne(filter, new BsonDocument("IsDead", true));
 		}
 
 		return save;
@@ -128,7 +141,7 @@ internal class GameMongoClient
 		var test = db.GetCollection<Snake>("TestCollection");
 
 		var snake = new Snake(new Position(1, 1), 's');
-		test.ReplaceOne(new BsonDocument("_id", 0 ), snake, new ReplaceOptions { IsUpsert = true });
+		test.ReplaceOne(new BsonDocument("_id", 2 ), snake, new ReplaceOptions { IsUpsert = true });
 		var snakes = test.Find(new BsonDocument()).ToList();
 	}
 }
@@ -137,11 +150,18 @@ public class SaveObject
 {
 	public ObjectId Id { get; set; }
     public string SaveCollectionName { get; set; }
+	/// <summary>
+	/// Player character name
+	/// </summary>
     public string Name { get; set; }
 	public bool IsDead { get; set; } = false;
     public int Turn { get; set; }
 
-    public SaveObject(string name)
+	/// <summary>
+	/// The provided name must be the name of the player character and it has to be unique.
+	/// </summary>
+	/// <param name="name"></param>
+	public SaveObject(string name)
 	{
 		Name = name;
 		SaveCollectionName = name + "_"+DateTime.Now.Date;

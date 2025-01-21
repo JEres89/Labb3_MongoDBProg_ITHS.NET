@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Labb3_MongoDBProg_ITHS.NET.Backend;
+﻿namespace Labb3_MongoDBProg_ITHS.NET.Backend;
 internal interface IInputEndpoint
 {
-    internal void KeyPressed(ConsoleKeyInfo key);
+    internal void KeyPressed(ConsoleKey key);
+    internal void CommandPressed(ConsoleKeyInfo command);
 
     internal void RegisterKeys(InputHandler handler);
 }
