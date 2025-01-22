@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Labb3_MongoDBProg_ITHS.NET.Game;
-internal class Dice
+﻿namespace Labb3_MongoDBProg_ITHS.NET.Game;
+internal static class Dice
 {
     private static Random _random = new();
 

@@ -103,13 +103,14 @@ internal class Level
 
 		_discovered = new ReadOnlySpan2D<bool>(discovered, height, width).ToArray();
 
-		//Walls = walls;
+		Walls = walls;
 		_enemies = enemies;
 	}
 
     internal void Clear()
 	{
         _elements = null!;
+		Walls = null!;
 		_discovered = null!;
 		_enemies.Clear();
         _enemies = null!;

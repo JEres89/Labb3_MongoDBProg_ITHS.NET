@@ -1,15 +1,7 @@
 ﻿using CommunityToolkit.HighPerformance;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Labb3_MongoDBProg_ITHS.NET.Game;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Files;
 internal static class LevelReader
