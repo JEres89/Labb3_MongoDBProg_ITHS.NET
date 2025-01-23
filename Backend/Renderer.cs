@@ -2,6 +2,7 @@
 using System.Text;
 using CommunityToolkit.HighPerformance;
 using Labb3_MongoDBProg_ITHS.NET.Game;
+using static System.Net.Mime.MediaTypeNames;
 using static Labb3_MongoDBProg_ITHS.NET.Backend.MessageLog;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Backend;
@@ -9,7 +10,8 @@ namespace Labb3_MongoDBProg_ITHS.NET.Backend;
 internal class Renderer
 {
     public static Renderer Instance { get; private set; } = new();
-    private Renderer() { }
+	private static MessageLog Log => MessageLog.Instance;
+	private Renderer() { }
 
     private readonly Queue<(Position, (char c, ConsoleColor fg, ConsoleColor bg) gfx)> _mapUpdateQueue = new();
     private readonly Queue<(int y, int x, (string s, ConsoleColor fg, ConsoleColor bg) gfx)> _uiUpdateQueue = new();
@@ -35,7 +37,8 @@ internal class Renderer
     private int bufferWidth;
     private int bufferHeight;
 
-    private int statusBarHeight = 4;
+	private int turnStatusX;
+    private int statusBarHeight = 3;
 	private int statusBarWidth => MapWidth + MapXoffset - 2;
 
 	private int logStartX => MapWidth + MapXoffset;
@@ -48,7 +51,7 @@ internal class Renderer
 	/// Offset in lines
 	/// </summary>
 	private int logScrollOffset = 0;
-	private int logScrollOffsetChange = 0;
+	private int logScrollChange = 0;
 
     private int minWidth => MapXoffset + MapWidth + logMinWidth;
     private int minHeight => MapYoffset + MapHeight + statusBarHeight;
@@ -62,7 +65,7 @@ internal class Renderer
 		_logUpdateQueue.Clear();
 
 		Instance = new();
-		MessageLog.Instance.OnMessageAdded -= MessageAdded;
+		Log.OnMessageAdded -= MessageAdded;
 	}
 	internal void SetMapCoordinates(int mapStartTop, int mapStartLeft, int height, int width)
 	{
@@ -82,8 +85,8 @@ internal class Renderer
         }
         Console.BufferHeight = bufferHeight;
         Console.BufferWidth = bufferWidth;
-		MessageLog.Instance.OnMessageAdded += MessageAdded;
-		if(MessageLog.Instance.Count > 0)
+		Log.OnMessageAdded += MessageAdded;
+		if(Log.Count > 0)
 		{
 			RenderLog(true);
 		}
@@ -112,6 +115,20 @@ internal class Renderer
 		RenderLog();
     }
 
+	internal void UpdateTurn(int turn)
+	{
+		const string full = "Has survived a total of {0} turns!";
+		const string turnSuffix = "{0} turns!";
+		if(turnStatusX == 0)
+		{
+			turnStatusX = full.Length-turnSuffix.Length+1;
+			_uiUpdateQueue.Enqueue((0, 1, (string.Format(full, turn), ConsoleColor.White, ConsoleColor.Black)));
+		}
+		else
+		{
+			_uiUpdateQueue.Enqueue((0, turnStatusX, (string.Format(turnSuffix, turn), ConsoleColor.White, ConsoleColor.Black)));
+		}
+	}
 	internal void UpdateStatusBar(string text)
 	{
 		//_statusBar = text;
@@ -144,7 +161,21 @@ internal class Renderer
 		{
 			lines.Add(text);
 		}
-		int yOffset = lines.Count < statusBarHeight ? 1 : 0;
+
+		if(lines.Count < statusBarHeight)
+		{
+			Span<char> filler = new Span<char>(new char[statusBarWidth]);
+			filler.Fill(' ');
+			List<string> newlines = [];
+			for(int i = 0; i <  statusBarHeight-lines.Count; i++)
+			{
+				newlines.Add(filler.ToString());
+			}
+			newlines.AddRange(lines);
+			lines = newlines;
+		}
+
+		int yOffset = lines.Count < statusBarHeight ? 2 : 1;
 		for (int i = 0; i < lines.Count; i++)
 		{
 			_uiUpdateQueue.Enqueue((yOffset+i, 1, (lines[i], ConsoleColor.White, ConsoleColor.Black)));
@@ -157,14 +188,15 @@ internal class Renderer
 	/// <param name="rerender"></param>
     private void RenderLog(bool rerender = false)
     {
-		int linesToRender = 0;
+		int linesToRenderDown = 0;
 
-		if(logScrollOffsetChange != 0)
+		if(logScrollChange != 0)
 		{
-			var change = logScrollOffsetChange;
-			logScrollOffsetChange = 0;
+			var change = logScrollChange;
+			logScrollChange = 0;
 			ScrollLog(change);
 		}
+		
 
 		if (_logUpdateQueue.Count == 0 && !rerender)
 		{
@@ -174,39 +206,91 @@ internal class Renderer
 		{
 			if(rerender)
 			{
-				linesToRender = InitializeLog();
+				linesToRenderDown = InitializeLog();
 				logHeight = 0;
+
+				if(linesToRenderDown == 0)
+					return;
+				if(linesToRenderDown > bufferHeight)
+					linesToRenderDown = bufferHeight;
+				ScrollForward(linesToRenderDown);
 			}
 			else
 			{
+				byte state = logScrollOffset > 0 ? (byte)(1<<0) : (byte)0;
+
+				state = logScrollChange switch
+				{
+					> 0 => (byte)(state | 1<<1),
+					< 0 => (byte)(state | 1<<2),
+					_ => 0
+				};
+
+				int linesToRenderUp = 0;
 				List<string> messageLines = new();
 				if(_logUpdateQueue.TryPeek(out var item) && item.msg is AggregateMessage aggr)
 				{
 					if(RenderAggregate(aggr, item.logIndex))
 						_logUpdateQueue.Dequeue();
 				}
-				var queueLen = _logUpdateQueue.Count;
+
 				while(_logUpdateQueue.TryDequeue(out item))
 				{
 					var (message, logIndex) = item;
+					// if the log is scrolled up, we don't want to render any new messages
 					CreateLines(message.GenerateMessage(), messageLines, logWidth, message.Turn);
 					_logCache.Add(logIndex, (message, messageLines.ToArray()));
-					linesToRender += messageLines.Count;
+
+					if(logIndex > _visibleLog.Last!.Value.cacheIndex)
+						linesToRenderDown += messageLines.Count;
+					else
+						linesToRenderUp += messageLines.Count;
 					messageLines.Clear();
 				}
-				// if the log is scrolled up, we don't want to render any new messages
-				if(logScrollOffset > 0)
+
+				switch(state)
 				{
-					logScrollOffset += linesToRender;
-					return;
+					case 0:
+						ScrollForward(linesToRenderDown);
+						break;
+
+					// scrolled up
+					case 1:
+						logScrollOffset += linesToRenderDown;
+						linesToRenderDown = 0;
+						break;
+
+						// scrolled up and pending to scroll down
+					case 3:
+						if(logScrollOffset > logScrollChange)
+						{
+							ScrollForward(logScrollChange);
+							logScrollOffset += linesToRenderDown - logScrollChange;
+						}
+						else if(logScrollOffset <= logScrollChange)
+						{
+							linesToRenderDown = logScrollOffset + linesToRenderDown;
+							logScrollOffset = 0;
+						}
+						logScrollChange = 0;
+						break;
+
+					// scrolled down but pending to scroll up
+					case 4:
+					// scrolled up and pending to scroll up
+					case 5:
+						logScrollOffset = linesToRenderDown - logScrollChange;
+						ScrollBackward(logScrollChange);
+						logScrollChange = 0;
+						break;
+
+					// invalid state, cannot scroll forward if the log is already at the bottom
+					case 2:
+					default:
+						logScrollChange = 0;
+						break;
 				}
 			}
-			if(linesToRender == 0)
-				return;
-			if(linesToRender > bufferHeight)
-				linesToRender = bufferHeight;
-			ScrollForward(linesToRender);
-			//RenderLines(linesToRender, rerender);
 		}
 
 		bool RenderAggregate(AggregateMessage aggr, int logIndex)
@@ -223,9 +307,13 @@ internal class Renderer
 			_logCache[prevEntry.Key] = (aggr, arr);
 			
 			int diff = arr.Length - prevEntry.Value.linesCache.Length;
-			// if the log is scrolled up, we don't want to render any new messages
-			if(logScrollOffset > 0)
+			// if the log is scrolled up or is waiting to be scrolled up, we don't want to render any new messages
+			if(logScrollOffset > 0 || logScrollChange < 0)
+			{
+				logScrollOffset += diff;
 				return true;
+			}
+
 			while((_visibleLog.Last?.Value.cacheIndex??-1) == prevEntry.Key)
 			{
 				_visibleLog.RemoveLast();
@@ -241,18 +329,18 @@ internal class Renderer
 	}
 	private int InitializeLog()
 	{
-		var (message, lastMessageIndex) = MessageLog.Instance.GetLastMessage();
-		//int lastMessageIndex = message.i;
-		if(lastMessageIndex == -1)
+		
+		if(Log.Count == 0)
 			return 0;
 
 		_visibleLog.Clear();
 		_logUpdateQueue.Clear();
 		logScrollOffset = 0;
-		logScrollOffsetChange = 0;
+		logScrollChange = 0;
 
 		int lastCachedIndex = -1;
 		int firstCachedIndex = -1;
+
 		if(_logCache.Count > 0)
 		{
 			// lastCachedIndex is used to load any messages from the MessageLog that are not in the cache, and firstCachedIndex is used to mark the last message to be (re)converted into lines
@@ -260,31 +348,55 @@ internal class Renderer
 			firstCachedIndex = _logCache.First().Key;
 		}
 		else // If _log is empty, we set both cache indexes to the same value so we load as many messages as needed to fill the buffer and convert all to lines.
-			 // -1 because if the cache is empty we also want to load the first index which is 0
-			lastCachedIndex = firstCachedIndex = Math.Max(lastMessageIndex - bufferHeight, -1);
+			lastCachedIndex = firstCachedIndex = Math.Max(Log.Count - bufferHeight, 0);
 
-		for(int i = lastMessageIndex; i > lastCachedIndex;)
-		{
-			_logCache.Add(i, (message, []));
-			(message, i) = MessageLog.Instance.GetNextMessage(i);
-		}
-
-		int count = _logCache.Count;
 		int linesToRender = 0;
+
 		List<string> logLines = new();
-		for(int n = lastMessageIndex; n > firstCachedIndex; n--)
+		int i = Log.Count;
+
+		while(i > lastCachedIndex && linesToRender < bufferHeight)
 		{
-			var cache = _logCache[n];
-			message = cache.message;
+			(var message, i) = Log.GetNextMessage(i);
 
 			var text = message.GenerateMessage();
 			CreateLines(text, logLines, logWidth, message.Turn);
 
-			cache = (message, logLines.ToArray());
-			_logCache[n] = cache;
 			linesToRender += logLines.Count;
+
+			_logCache.Add(i, (message, logLines.ToArray()));
+
 			logLines.Clear();
 		}
+
+		for(; i > firstCachedIndex && linesToRender < bufferHeight; i--)
+		{
+			(var message, _) = _logCache[i];
+
+			var text = message.GenerateMessage();
+			CreateLines(text, logLines, logWidth, message.Turn);
+
+			linesToRender += logLines.Count;
+
+			_logCache[i] = (message, logLines.ToArray());
+
+			logLines.Clear();
+		}
+
+		while(i > 0 && linesToRender < bufferHeight)
+		{
+			(var message, i) = Log.GetNextMessage(i);
+
+			var text = message.GenerateMessage();
+			CreateLines(text, logLines, logWidth, message.Turn);
+
+			linesToRender += logLines.Count;
+
+			_logCache.Add(i, (message, logLines.ToArray()));
+
+			logLines.Clear();
+		}
+
 		return linesToRender;
 	}
 	/// <summary>
@@ -299,7 +411,7 @@ internal class Renderer
 		{
 			change = logScrollOffset;
 		}
-		//else if(targetOffset >= MessageLog.Instance.Count)
+		//else if(targetOffset >= Log.Count)
 		//	change = _visibleLog.Count;
 
 		if(change == 0)
@@ -327,13 +439,13 @@ internal class Renderer
 							break;
 						if(!_logCache.TryGetValue(index, out var next))
 						{	// trigger messages from MessageLog and delay scrolling the missing lines to next update
-							MessageLog.Instance.LoadNextMessages(index+1, -change);
+							Log.LoadNextMessages(index+1, -change);
 							
 							// if performance gets choppy, use this instead of below
 							//logScrollOffsetChange = change;
 							//return;
 
-							logScrollOffsetChange = change + count;
+							logScrollChange = change + count;
 							break;
 						}
 						else 
@@ -433,6 +545,13 @@ internal class Renderer
 				msgIndex--;
 			}
 			msgIndex++;
+
+			// should only happen on a rerender with a full message log where the first message in view is only partially rendered.
+			if(count > linesToRender)
+			{
+				linesRendered += PrintLogLine(msgIndex, linesToRender-count, direction);
+				msgIndex++;
+			}
 		}
 
 		for( ; linesRendered < linesToRender; msgIndex++)
@@ -496,12 +615,20 @@ internal class Renderer
 		int i =		 direction > 0	? 0					: linesCache.Length-1;
 		int target = direction > 0	? linesCache.Length : -1;
 
+		// also for when a rerender only renders a partial message at the top
+		if(offset < 0 && direction == 1)
+		{
+			i -= offset;
+			offset = 0;
+		}
+		int rendered = 0;
 		for(; i != target && (offset >= 0 && offset < bufferHeight); i += direction)
 		{
 			string? line = linesCache[i];
 			Console.SetCursorPosition(logStartX, offset);
 			Console.ForegroundColor = message.MessageColor;
 			Console.Write(line);
+			rendered++;
 			offset += direction;
 			if(direction > 0)
 			{
@@ -513,7 +640,7 @@ internal class Renderer
 			}
 		}
 
-		return linesCache.Length - (direction > 0 ? (target-i) : (i-target));
+		return rendered; //linesCache.Length - (direction > 0 ? (target-i) : (i-target));
 	}
 	private void MessageAdded(LogMessageBase message, int index)
 	{
@@ -521,7 +648,7 @@ internal class Renderer
 	}
 	internal void LogScrolled(int steps)
 	{
-		logScrollOffsetChange += steps;
+		logScrollChange += steps;
 	}
 	//internal void AddLogLine(string line, ConsoleColor textColor = ConsoleColor.White)
 	//{
@@ -548,11 +675,11 @@ internal class Renderer
 		var lineChars = 0;
 		bool prependLogOffset;
 		if(prependLogOffset = withTurn != -1)
-		{
-			if(logPrintedTurn == withTurn)
-				withTurn = -1;
-			else
-				logPrintedTurn = withTurn;
+		{	// rendering each turn only once got messed up when reverting 
+			//if(logPrintedTurn == withTurn)
+			//	withTurn = -1;
+			//else
+			//	logPrintedTurn = withTurn;
 		}
 		while (lineChars < text.Length)
 		{
@@ -626,7 +753,7 @@ internal class Renderer
 
     private void WindowResize()
     {
-
+		turnStatusX = 0;
         while (bufferWidth < minWidth || bufferHeight < minHeight)
         {
             Console.Clear();
@@ -744,10 +871,6 @@ internal class Renderer
 			default:
                 break;
         }
-
-        InputHandler.Instance.Stop();
-		//_ = InputHandler.Instance.AwaitNextKey();
-
 	}
 }
 #pragma warning restore CA1416 // Validate platform compatibility

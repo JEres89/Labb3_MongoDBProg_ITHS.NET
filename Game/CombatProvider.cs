@@ -84,10 +84,13 @@ internal static class CombatProvider
 
 		public override string GenerateMessage()
         {
+			if(_message != null)
+				return _message;
+
             string deathMsg = _effectIndex > -1 ? $" {defenderName} dies {_deathEffect[_effectIndex]}" : string.Empty;
 
-			string msg = string.Format(formatString, attackerName, defenderName, attDieNum, attDieSize, attMod, attackRoll, defDieNum, defDieSize, defMod, defenseRoll, Damage, deathMsg);
-            return msg;
+			_message = string.Format(formatString, attackerName, defenderName, attDieNum, attDieSize, attMod, attackRoll, defDieNum, defDieSize, defMod, defenseRoll, Damage, deathMsg);
+            return _message;
         }
 
 		private static string formatString = "{0} attacks {1} with a roll of {2}d{3}+{4} = {5} vs {6}d{7}+{8} = {9}, dealing {10} Damage.{11}";

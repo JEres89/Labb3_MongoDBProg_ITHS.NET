@@ -37,7 +37,6 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	[BsonIgnore]
 	public bool StatusChanged { get; private set; }
 	string statusText = default!;
-	int turn = 0;
 
 	[BsonIgnore]
 	public bool WillAct { get; set; }
@@ -89,7 +88,7 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	private void UpdateStatusText()
 	{
 		StatusChanged = true;
-		statusText = $"{PlayerName}: {PlayerHealth} HP, {AttackDieNum}d{AttackDieSize}+{AttackMod} ATK, {DefenseDieNum}d{DefenseDieSize}+{DefenseMod} DEF. Has survived a total of {turn} turns!";
+		statusText = $"{PlayerName}: {PlayerHealth} HP, {AttackDieNum}d{AttackDieSize}+{AttackMod} ATK, {DefenseDieNum}d{DefenseDieSize}+{DefenseMod} DEF";
 	}
 	public string GetStatusText()
 	{
@@ -122,11 +121,10 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 			Act(CurrentLevel, direction);
 		}
 		pressedKey = default;
-		if (HasActed)
-		{
-			turn = CurrentLevel.Turn+1;
-			UpdateStatusText();
-		}
+		//if (HasActed)
+		//{
+		//	UpdateStatusText();
+		//}
 	}
 
 	protected override bool ActsIfCollide(LevelElement element, out Reactions reaction)

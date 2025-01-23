@@ -1,14 +1,16 @@
 ﻿using Labb3_MongoDBProg_ITHS.NET.Backend;
 using Labb3_MongoDBProg_ITHS.NET.Elements;
 using Labb3_MongoDBProg_ITHS.NET.Files;
-using Labb3_MongoDBProg_ITHS.NET.MongoDB;
+using Labb3_MongoDBProg_ITHS.NET.Database;
 using MongoDB.Bson;
 using System.Diagnostics;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class GameLoop : IInputEndpoint
 {
-	private static readonly ConsoleKeyInfo _saveCommand = new('S', ConsoleKey.S, false, false, true);
+	private const char CTRL_S_CHAR = '\u0013'; //WHAT?
+
+	private static readonly ConsoleKeyInfo _saveCommand = new(CTRL_S_CHAR, ConsoleKey.S, false, false, true);
     private const ConsoleKey _scrollUpKey = ConsoleKey.PageUp;
     private const ConsoleKey _scrollDownKey = ConsoleKey.PageDown;
 
@@ -33,8 +35,11 @@ internal class GameLoop : IInputEndpoint
     }
     public GameLoop(SaveObject save, Level level)
     {
+		Instance = this;
+		Renderer = Renderer.Instance;
 		CurrentGame = save.Id;
         CurrentLevel = level;
+        Player.SetName(save.Name);
 	}
 
     internal void Clear()
@@ -70,10 +75,10 @@ internal class GameLoop : IInputEndpoint
         }
         Renderer.SetMapCoordinates(5, 2, CurrentLevel.Height, CurrentLevel.Width);
         Renderer.Initialize();
-        CurrentLevel.InitMap();
+        CurrentLevel.ReRender();
         Player.RegisterKeys(input);
 
-        CurrentGame = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog, null).Result;
+        CurrentGame = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, CurrentGame).Result;
 
         RegisterKeys(input);
     }
@@ -83,7 +88,7 @@ internal class GameLoop : IInputEndpoint
         int tickTime = 100;
         Stopwatch tickTimer = new();
         int ticks = 0;
-        input.InputListener = Task.Run(input.Start);
+        InputHandler.Instance.Start();
 		//Renderer.DeathScreen();
 		while(true)
 		{
@@ -109,7 +114,7 @@ internal class GameLoop : IInputEndpoint
 
 			if(_saveRequested)
 			{
-				GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog, null).RunSynchronously();
+				var result = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, CurrentGame).Result;
 			}
 			if(timeLeft > 0)
 				Thread.Sleep(timeLeft);

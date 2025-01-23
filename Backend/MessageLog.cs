@@ -1,24 +1,35 @@
-﻿using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
+﻿using System.Collections.ObjectModel;
+using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Backend;
 internal class MessageLog
 {
+    public string? SaveName { get; private set; }
     public static MessageLog Instance { get; private set; } = new();
     public int Count => _messages.Count;
 	private List<LogMessageBase> _messages;
 	private LogMessage? _lastMessage;
 	private AggregateMessage? _lastAggregate;
 
+	internal void Clear()
+	{
+		SaveName = null;
+		_lastMessage = null;
+		_lastAggregate = null;
+		_messages = new(Count);
+	}
 	private MessageLog()
 	{
 		_messages = new();
 	}
 	
-	public void LoadMessageLog(List<LogMessageBase> messages)
+	public void LoadMessageLog(List<LogMessageBase> messages, string saveName)
     {
+		SaveName = saveName;
 		_messages = messages;
 	}
 
+	internal List<LogMessageBase> Messages => _messages;
 	public void AddLogMessage(LogMessageBase message)
 	{
 		if(message is LogMessage logMessage)
@@ -78,15 +89,13 @@ internal class MessageLog
 		{
 			_aggregatedMessages++;
 			Turn = message.Turn;
+			_message = null;
 		}
 
-		public override string GenerateMessage()
-		{
-			return $"{string.Format(eventStrings[EventIndex], Args)} [{_aggregatedMessages}]";
-		}
+		public override string GenerateMessage() => _message??=$"{string.Format(eventStrings[EventIndex], Args)} [{_aggregatedMessages}]";
 	}
 
-	internal (LogMessageBase msg, int i) GetLastMessage() => Count > 0 ? (_messages.Last(), _messages.Count-1) : (null!, -1);
+	internal (LogMessageBase msg, int index) GetLastMessage() => Count > 0 ? (_messages.Last(), _messages.Count-1) : (null!, -1);
 
 	/// <summary>
 	/// Returns the next message and index in desceding order

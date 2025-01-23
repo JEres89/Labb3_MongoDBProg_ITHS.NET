@@ -6,8 +6,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
+[BsonIgnoreExtraElements(true)]
 internal class Level
 {
+    public int LevelNumber { get; private set; } = 1;
 	public int Width { get; private set; }
     public int Height { get; private set; }
     public int Turn { get; private set; }
@@ -80,8 +82,9 @@ internal class Level
     }
 
 	[BsonConstructor]
-    public Level(int width, int height, int turn, PlayerEntity player, List<Position> walls, List<LevelEntity> enemies, bool[] discovered)
+    public Level(int levelNumber, int width, int height, int turn, PlayerEntity player, List<Position> walls, List<LevelEntity> enemies, bool[] discovered)
     {
+		LevelNumber = levelNumber;
 		Width = width;
 		Height = height;
 		Turn = turn;
@@ -119,11 +122,12 @@ internal class Level
 		_renderUpdateCoordinates.Clear();
 		_renderUpdateCoordinates = null!;
 	}
-	internal void InitMap()
-    {
-        UpdateDiscoveredAndPlayerView(true);
-        //UpdateRendererAll();
-    }
+	//internal void InitMap()
+ //   {
+	//	ReRender();
+ //       //UpdateDiscoveredAndPlayerView(true);
+ //       //UpdateRendererAll();
+ //   }
     private void UpdateDiscoveredAndPlayerView(bool render)
     {
         var viewRange = Player.ViewRange;
@@ -278,8 +282,12 @@ internal class Level
     internal void UpdateRendererAll()
     {
         _renderUpdateCoordinates.Clear();
-        //_renderQueue.Clear();
-        for (int y = 0; y < Height; y++)
+
+		Renderer.UpdateTurn(Turn);
+		Renderer.UpdateStatusBar(Player.GetStatusText());
+
+		//_renderQueue.Clear();
+		for (int y = 0; y < Height; y++)
         {
             for (int x = 0; x < Width; x++)
             {
@@ -353,9 +361,10 @@ internal class Level
                 }
 			}
 
+			Turn++;
+			Renderer.UpdateTurn(Turn);
 			if (Player.StatusChanged) Renderer.UpdateStatusBar(Player.GetStatusText());
 			Player.HasActed = false;
-			Turn++;
 			return true;
 		}
         if(Player.StatusChanged) Renderer.UpdateStatusBar(Player.GetStatusText());

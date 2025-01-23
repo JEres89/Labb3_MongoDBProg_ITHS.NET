@@ -15,10 +15,14 @@ internal class InputHandler
     {
 		_listeners.Clear();
 	}
-    internal ConsoleKeyInfo Start()
+    internal void Start()
+    {
+        running = true;
+		InputListener = Task.Run(Listener);
+	}
+	private ConsoleKeyInfo Listener()
     {
         ConsoleKeyInfo k = default;
-        running = true;
         while (running)
         {
             k = Console.ReadKey(true);
@@ -40,7 +44,7 @@ internal class InputHandler
     internal void Stop()
     {
         running = false;
-    }
+	}
     internal void AddKeyListener(ConsoleKey key, IInputEndpoint listener)
     {
         _listeners[key] = listener;
@@ -57,7 +61,7 @@ internal class InputHandler
         running = false;
         var key = InputListener.Result;
 
-        InputListener = Task.Run(Start);
+        Start();
 
         return key;
     }

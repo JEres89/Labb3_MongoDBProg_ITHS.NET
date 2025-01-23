@@ -40,7 +40,7 @@ internal static class EventMessageProvider
 			Args = message.Args;
 			MessageColor = message.MessageColor;
 		}
-		public override string GenerateMessage() => $"{string.Format(eventStrings[EventIndex], Args)}";
+		public override string GenerateMessage() => _message ??= $"{string.Format(eventStrings[EventIndex], Args)}";
 		//public override string GenerateMessageWithTurn() => $"{Turn,3} | {string.Format(eventStrings[EventIndex], Args)}";
 	}
 
