@@ -28,7 +28,7 @@ internal class Renderer
 
 	private string _statusBar = string.Empty;
 
-
+    public IRenderSource? RenderSource { get; set; }
     public int MapXoffset { get; set; }
     public int MapYoffset { get; set; }
     public int MapWidth { get; set; }
@@ -46,7 +46,7 @@ internal class Renderer
 	private int logStampWidth = 6;
     private int logMinWidth = 15;
     private int logHeight = 0;
-	private int logPrintedTurn = -1;
+
 	/// <summary>
 	/// Offset in lines
 	/// </summary>
@@ -60,12 +60,12 @@ internal class Renderer
 	{
 		_mapUpdateQueue.Clear();
 		_uiUpdateQueue.Clear();
-		_logCache.Clear();
-		_visibleLog.Clear();
-		_logUpdateQueue.Clear();
-
-		Instance = new();
+		
+		ResetLog();
 		Log.OnMessageAdded -= MessageAdded;
+
+		RenderSource = null;
+		Instance = new();
 	}
 	internal void SetMapCoordinates(int mapStartTop, int mapStartLeft, int height, int width)
 	{
@@ -83,8 +83,11 @@ internal class Renderer
         {
             WindowResize();
         }
-        Console.BufferHeight = bufferHeight;
-        Console.BufferWidth = bufferWidth;
+		else
+		{
+			Console.BufferHeight = bufferHeight;
+			Console.BufferWidth = bufferWidth;
+		}
 		Log.OnMessageAdded += MessageAdded;
 		if(Log.Count > 0)
 		{
@@ -103,7 +106,9 @@ internal class Renderer
             Console.BackgroundColor = gfx.bg;
             Console.Write(gfx.c);
 		}
-		Console.ResetColor();
+		//Console.ResetColor();
+		Console.BackgroundColor = ConsoleColor.Black;
+		Console.ForegroundColor = ConsoleColor.Gray;
 		while (_uiUpdateQueue.TryDequeue(out var data))
         {
             var (y, x, gfx) = data;
@@ -181,12 +186,21 @@ internal class Renderer
 			_uiUpdateQueue.Enqueue((yOffset+i, 1, (lines[i], ConsoleColor.White, ConsoleColor.Black)));
 		}
 	}
-
+	internal void ResetLog()
+	{
+		_logCache.Clear();
+		_visibleLog.Clear();
+		_logUpdateQueue.Clear();
+		logHeight = 0;
+		logScrollChange = 0;
+		logScrollOffset = 0;
+		Log.Clear();
+	}
 	/// <summary>
 	/// TODO?: Extract all log functionality to separate class
 	/// </summary>
 	/// <param name="rerender"></param>
-    private void RenderLog(bool rerender = false)
+	internal void RenderLog(bool rerender = false)
     {
 		int linesToRenderDown = 0;
 
@@ -196,7 +210,6 @@ internal class Renderer
 			logScrollChange = 0;
 			ScrollLog(change);
 		}
-		
 
 		if (_logUpdateQueue.Count == 0 && !rerender)
 		{
@@ -241,7 +254,7 @@ internal class Renderer
 					CreateLines(message.GenerateMessage(), messageLines, logWidth, message.Turn);
 					_logCache.Add(logIndex, (message, messageLines.ToArray()));
 
-					if(logIndex > _visibleLog.Last!.Value.cacheIndex)
+					if(logIndex > (_visibleLog.Last?.Value.cacheIndex??-1))
 						linesToRenderDown += messageLines.Count;
 					else
 						linesToRenderUp += messageLines.Count;
@@ -254,7 +267,7 @@ internal class Renderer
 						ScrollForward(linesToRenderDown);
 						break;
 
-					// scrolled up
+						// scrolled up
 					case 1:
 						logScrollOffset += linesToRenderDown;
 						linesToRenderDown = 0;
@@ -275,13 +288,15 @@ internal class Renderer
 						logScrollChange = 0;
 						break;
 
-					// scrolled down but pending to scroll up
+						// scrolled down but pending to scroll up
 					case 4:
-					// scrolled up and pending to scroll up
+						// scrolled up and pending to scroll up
 					case 5:
-						logScrollOffset = linesToRenderDown - logScrollChange;
-						ScrollBackward(logScrollChange);
-						logScrollChange = 0;
+						var linesToRender = Math.Max(logScrollChange, -linesToRenderUp);
+						logScrollOffset += linesToRenderDown - linesToRender;
+						ScrollBackward(linesToRender);
+
+						logScrollChange = Math.Min(logScrollChange - linesToRender, 0);
 						break;
 
 					// invalid state, cannot scroll forward if the log is already at the bottom
@@ -348,14 +363,14 @@ internal class Renderer
 			firstCachedIndex = _logCache.First().Key;
 		}
 		else // If _log is empty, we set both cache indexes to the same value so we load as many messages as needed to fill the buffer and convert all to lines.
-			lastCachedIndex = firstCachedIndex = Math.Max(Log.Count - bufferHeight, 0);
+			lastCachedIndex = firstCachedIndex = -1;
 
 		int linesToRender = 0;
 
 		List<string> logLines = new();
 		int i = Log.Count;
 
-		while(i > lastCachedIndex && linesToRender < bufferHeight)
+		while(i-1 > lastCachedIndex && linesToRender < bufferHeight)
 		{
 			(var message, i) = Log.GetNextMessage(i);
 
@@ -368,8 +383,8 @@ internal class Renderer
 
 			logLines.Clear();
 		}
-
-		for(; i > firstCachedIndex && linesToRender < bufferHeight; i--)
+		i--;
+		for(;i >= 0 && i >= firstCachedIndex && linesToRender < bufferHeight; i--)
 		{
 			(var message, _) = _logCache[i];
 
@@ -382,7 +397,7 @@ internal class Renderer
 
 			logLines.Clear();
 		}
-
+		i = firstCachedIndex;
 		while(i > 0 && linesToRender < bufferHeight)
 		{
 			(var message, i) = Log.GetNextMessage(i);
@@ -540,8 +555,15 @@ internal class Renderer
 			(msgIndex, var value) = _logCache.Last();
 			while(count < linesToRender)
 			{
-				value = _logCache[msgIndex];
-				count += value.linesCache.Length;
+				if(_logCache.TryGetValue( msgIndex, out value))
+				{
+					count += value.linesCache.Length;
+				}
+				else
+				{
+					msgIndex--;
+					break;
+				}
 				msgIndex--;
 			}
 			msgIndex++;
@@ -742,7 +764,9 @@ internal class Renderer
     {
         if (Console.WindowWidth != bufferWidth || Console.WindowHeight != bufferHeight)
 		{
-			Console.ResetColor();
+			//Console.ResetColor();
+			Console.BackgroundColor = ConsoleColor.Black;
+			Console.ForegroundColor = ConsoleColor.Gray;
 			Console.Clear();
             PauseMessage("Window is being resized");
             bufferWidth = Console.WindowWidth;
@@ -754,9 +778,9 @@ internal class Renderer
     private void WindowResize()
     {
 		turnStatusX = 0;
-        while (bufferWidth < minWidth || bufferHeight < minHeight)
+		Console.Clear();
+		while (bufferWidth < minWidth || bufferHeight < minHeight)
         {
-            Console.Clear();
             PauseMessage($"Window size is too small: w:{bufferWidth}/min:{minWidth}, h:{bufferHeight}/min:{minHeight}");
 
             bufferWidth = Console.WindowWidth;
@@ -766,8 +790,7 @@ internal class Renderer
 		Console.BufferWidth = bufferWidth;
 		Console.Clear();
 
-		// TODO: decouple
-		GameLoop.Instance.CurrentLevel.ReRender();
+		RenderSource?.ReRender();
         if(_logCache.Count > 0)
 		{
 			RenderLog(true);

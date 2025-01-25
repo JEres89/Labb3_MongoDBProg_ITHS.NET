@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
 [BsonIgnoreExtraElements(true)]
-internal class Level
+internal class Level : IRenderSource
 {
     public int LevelNumber { get; private set; } = 1;
 	public int Width { get; private set; }
@@ -274,7 +274,7 @@ internal class Level
 			}
 		}
 	}
-	internal void ReRender()
+	public void ReRender()
     {
         UpdateDiscoveredAndPlayerView(false);
         UpdateRendererAll();
@@ -322,8 +322,9 @@ internal class Level
     }
 
     internal bool Update()
-    {
-        if (Player.WillAct)
+	{
+		Turn++;
+		if (Player.WillAct)
         {
             Player.Update(this);
         }
@@ -361,7 +362,6 @@ internal class Level
                 }
 			}
 
-			Turn++;
 			Renderer.UpdateTurn(Turn);
 			if (Player.StatusChanged) Renderer.UpdateStatusBar(Player.GetStatusText());
 			Player.HasActed = false;

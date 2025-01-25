@@ -99,6 +99,17 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 		if (currentLevel.TryMove(this, direction, out collisionTarget))
 		{
 			Pos = Pos.Move(direction);
+			if(this is PlayerEntity)
+			{
+				string cardinal = direction switch
+				{
+					(-1, 0) => "north",
+					(1, 0) => "south",
+					(0, -1) => "west",
+					(0, 1) => "east"
+				};
+				currentLevel.MessageLog.AddLogMessage(new LogMessage(currentLevel.Turn, MOVE, ConsoleColor.White, cardinal));
+			}
 			return HasActed = true;
 		}
 		else
@@ -136,7 +147,6 @@ internal abstract class LevelEntity : LevelElement/*, IConvertibleToBsonDocument
 	{
 		if (collisionTarget is LevelEntity enemy)
 		{
-			bool isPlayer = this is PlayerEntity;
 			var attack = Attack(this, enemy, currentLevel.Turn);
 			bool enemyCounters = enemy.AttackedBy(currentLevel, this, attack, out var counter);
 			currentLevel.MessageLog.AddLogMessage(attack);

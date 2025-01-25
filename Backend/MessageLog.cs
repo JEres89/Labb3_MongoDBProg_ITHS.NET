@@ -28,6 +28,14 @@ internal class MessageLog
 		SaveName = saveName;
 		_messages = messages;
 	}
+	public bool SaveAs(string saveName)
+	{
+		if(SaveName != null)
+			return SaveName == saveName;
+
+		SaveName = saveName;
+		return true;
+	}
 
 	internal List<LogMessageBase> Messages => _messages;
 	public void AddLogMessage(LogMessageBase message)
@@ -40,7 +48,7 @@ internal class MessageLog
 				//_messages.Add(message);
 				//return;
 			}
-			else if(_lastMessage.EventIndex == logMessage.EventIndex)
+			else if(_lastMessage.CanAggregate(logMessage))
 			{
 				if(_lastAggregate is null)
 				{
@@ -84,7 +92,11 @@ internal class MessageLog
 			endTurn = message.Turn;
 			Turn = followingMessage.Turn;
 			_aggregatedMessages = 2;
+			_message = null;
 		}
+
+		public int AggregatedMessages { get => _aggregatedMessages; set => _aggregatedMessages=value; }
+
 		public void AddMessage(LogMessage message)
 		{
 			_aggregatedMessages++;

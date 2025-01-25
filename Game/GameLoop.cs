@@ -4,6 +4,8 @@ using Labb3_MongoDBProg_ITHS.NET.Files;
 using Labb3_MongoDBProg_ITHS.NET.Database;
 using MongoDB.Bson;
 using System.Diagnostics;
+using static Labb3_MongoDBProg_ITHS.NET.Game.EventMessageProvider;
+using MongoDB.Driver;
 
 namespace Labb3_MongoDBProg_ITHS.NET.Game;
 internal class GameLoop : IInputEndpoint
@@ -15,14 +17,16 @@ internal class GameLoop : IInputEndpoint
     private const ConsoleKey _scrollDownKey = ConsoleKey.PageDown;
 
     private bool _saveRequested = false;
+    private bool _exitRequested = false;
     private int _levelStart;
 
-    internal static GameLoop Instance { get; private set; }
-    internal Renderer Renderer { get; private set; }
+    internal static GameLoop Instance { get; private set; } = null!;
+	internal Renderer Renderer { get; private set; }
     internal InputHandler input = InputHandler.Instance;
     internal Level CurrentLevel { get; private set; }
     internal PlayerEntity Player => CurrentLevel.Player;
-    public ObjectId? CurrentGame { get; private set; }
+    public ObjectId? CurrentGame => _save?.Id;
+    private SaveObject? _save;
 
 
     public GameLoop(int levelStart, string? player)
@@ -37,12 +41,12 @@ internal class GameLoop : IInputEndpoint
     {
 		Instance = this;
 		Renderer = Renderer.Instance;
-		CurrentGame = save.Id;
+        _save = save;
         CurrentLevel = level;
         Player.SetName(save.Name);
 	}
 
-    internal void Clear()
+	internal void Clear()
     {
         Instance = null!;
 		Renderer.Clear();
@@ -55,7 +59,7 @@ internal class GameLoop : IInputEndpoint
     public void GameStart()
     {
         Initialize();
-
+        _save!.StartSession();
         Loop();
     }
 
@@ -68,44 +72,55 @@ internal class GameLoop : IInputEndpoint
             while (string.IsNullOrEmpty(name))
             {
                 Console.Write("Please enter your name: ");
-                name = Console.ReadLine();
+				Console.CursorVisible = true;
+				name = Console.ReadLine();
             }
-            Player.SetName(name);
+			Player.SetName(name);
+			Console.CursorVisible = false;
             Console.Clear();
-        }
+		}
         Renderer.SetMapCoordinates(5, 2, CurrentLevel.Height, CurrentLevel.Width);
         Renderer.Initialize();
+        Renderer.RenderSource = CurrentLevel;
         CurrentLevel.ReRender();
         Player.RegisterKeys(input);
 
-        CurrentGame = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, CurrentGame).Result;
+        if(_save == null)
+        {
+            _save = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, null);
+			MessageLog.Instance.AddLogMessage(new LogMessage(CurrentLevel.Turn, GAME_SAVE, ConsoleColor.Yellow));
+		}
+		else
+			MessageLog.Instance.AddLogMessage(new LogMessage(CurrentLevel.Turn, GAME_LOAD, ConsoleColor.Yellow));
 
-        RegisterKeys(input);
-    }
+		RegisterKeys(input);
+        InputHandler.Instance.Start();
+	}
 
-    private void Loop()
+	private void Loop()
     {
         int tickTime = 100;
         Stopwatch tickTimer = new();
         int ticks = 0;
-        InputHandler.Instance.Start();
-		//Renderer.DeathScreen();
-		while(true)
+
+		while(!_exitRequested)
 		{
 			tickTimer.Restart();
 
-			Update();
+			CurrentLevel.Update();
 
-			if (Player.Health <= 0)
+			if(Player.Health <= 0)
 			{
+                MessageLog.Instance.AddLogMessage(new LogMessage(CurrentLevel.Turn, DEATH, ConsoleColor.DarkRed));
 				Renderer.DeathScreen();
-                input.Stop();
+
+                _save!.StopSession();
+                _save.IsDead = true;
+                _save.Turn = CurrentLevel.Turn;
+
+				_save = GameMongoClient.Instance.SaveGame(CurrentLevel, MessageLog.Instance.Messages, _save);
 				return;
 			}
-			//if(ticks % 10 == 0)
-			//{
-			//	Renderer.AddLogLine($"Loop tick #{ticks}");
-			//}
 
 			Render();
 
@@ -114,17 +129,25 @@ internal class GameLoop : IInputEndpoint
 
 			if(_saveRequested)
 			{
-				var result = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, CurrentGame).Result;
+				Save();
 			}
 			if(timeLeft > 0)
 				Thread.Sleep(timeLeft);
 		}
+		Save();
 	}
 
-    private void Update()
+    private void Save()
     {
-        CurrentLevel.Update();
-    }
+		_save!.StopSession();
+		_save.Turn = CurrentLevel.Turn;
+		_save = GameMongoClient.Instance.SaveGame(CurrentLevel, CurrentLevel.MessageLog.Messages, _save);
+
+		_saveRequested = false;
+		_save.StartSession();
+
+		MessageLog.Instance.AddLogMessage(new LogMessage(CurrentLevel.Turn, GAME_SAVE, ConsoleColor.Yellow));
+	}
 
     private void Render()
     {
@@ -139,9 +162,15 @@ internal class GameLoop : IInputEndpoint
 			case _scrollDownKey:
 				Renderer.LogScrolled(1);
 				break;
+
 			case _scrollUpKey:
 				Renderer.LogScrolled(-1);
 				break;
+
+			case ConsoleKey.Escape:
+                _exitRequested = true;
+                break;
+
 			default:
                 break;
         }
@@ -158,5 +187,6 @@ internal class GameLoop : IInputEndpoint
 		handler.AddCommandListener(_saveCommand, this);
         handler.AddKeyListener(_scrollDownKey, this);
         handler.AddKeyListener(_scrollUpKey, this);
+        handler.AddKeyListener(ConsoleKey.Escape, this);
 	}
 }

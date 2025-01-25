@@ -13,6 +13,15 @@ internal class GameMongoClient
 {
 	private static GameMongoClient? _instance;
 	private static string? _dbConnectionString;
+	private MongoClient DbClient { get; set; } = null!;
+	private bool isConnected = false;
+    private Dictionary<string, List<LogMessageBase>>? LogCache { get; set; }
+	private BsonDocument emptyFilter = new BsonDocument();
+
+	private GameMongoClient()
+    {
+		Instance = this;
+	}
 
 	public static string? DbConnectionString
 	{
@@ -25,12 +34,8 @@ internal class GameMongoClient
 	}
 	public static GameMongoClient Instance { get => _instance??=new(); private set => _instance=value; }
 
-	public MongoClient? DbClient { get; set; }
     public List<SaveObject> Saves { get; set; } = null!;
-	private GameMongoClient()
-    {
-		Instance = this;
-	}
+
 
     public bool EnsureCreated()
     {
@@ -46,17 +51,18 @@ internal class GameMongoClient
 			}
 
 		var client = DbClient;
-		var db = client!.GetDatabase("JensEresund");
+		var db = client.GetDatabase("JensEresund");
 		db.RunCommand((Command<BsonDocument>)"{ping:1}");
 		var state = client.Cluster.Description.State;
 
 		if(state == MongoDB.Driver.Core.Clusters.ClusterState.Disconnected)
 		{
 			client.Dispose(true);
-			DbClient = null;
+			DbClient = null!;
 			_dbConnectionString = null;
 			return false;
 		}
+		isConnected = true;
 		//.Client.StartSession(options: null, default)
 		//Test();
 		//db.DropCollection("Levels");
@@ -93,55 +99,55 @@ internal class GameMongoClient
 		return true;
 	}
 
-	public async Task<ObjectId> SaveGame(Level level, List<LogMessageBase> log, ObjectId? id)
+	public SaveObject SaveGame(Level level, List<LogMessageBase> log, SaveObject? save)
 	{
+		if(!isConnected && !EnsureCreated())
+			throw new Exception("No server connection.");
+
 		var client = DbClient;
 		IMongoDatabase db = client.GetDatabase("JensEresund");
-		SaveObject save = GetSave(db, id, level.Player.Name);
 		
-		save.Turn = level.Turn;
-
-		var collectionAsLevel = db.GetCollection<Level>(save.SaveCollectionName, new());
-		if(collectionAsLevel.CountDocuments(new BsonDocument()) > 0)
+		if(save == null)
 		{
-			var result = collectionAsLevel.DeleteMany(new BsonDocument());
+			save = GetSave(db, level.Player.Name);
+			save.Turn = level.Turn;
 		}
-		await collectionAsLevel.InsertOneAsync(level);
+		
+		var saveFilter = Builders<SaveObject>.Filter.Eq(s => s.Id, save.Id);
+		db.GetCollection<SaveObject>("Saves").ReplaceOne(saveFilter, save, new ReplaceOptions() { IsUpsert = true });
 
+		SaveGameLog(save.SaveCollectionName, log, db);
 
-		var logCollection = db.GetCollection<GameLogDocument>("GameLogs", new() { AssignIdOnInsert = false });
-		if(id != null)
+		if(save.IsDead)
 		{
-			var filter = Builders<GameLogDocument>.Filter.Eq(l => l.Id, save.SaveCollectionName);
-			var projection = Builders<GameLogDocument>.Projection.Include(l => l.Count);
-
-			var count = logCollection.Find(filter).Project(projection).First()?["Count"].AsInt32;
-
-			if(count != null)
+			db.DropCollection(save.SaveCollectionName);
+		}
+		else
+		{
+			var collectionAsLevel = db.GetCollection<Level>(save.SaveCollectionName, new());
+			if(collectionAsLevel.CountDocuments(emptyFilter) > 0)
 			{
-				var update = Builders<GameLogDocument>.Update.Set(l => l.Count, log.Count).PushEach(l => l.Log, log.TakeLast(log.Count-count.Value));
-				await logCollection.UpdateOneAsync(filter, update);
+				var result = collectionAsLevel.DeleteMany(emptyFilter);
 			}
-			return save.Id;
+			collectionAsLevel.InsertOne(level);
 		}
 
-		await logCollection.InsertOneAsync(new GameLogDocument(save.SaveCollectionName, log.Count, log));
-		return save.Id;
+		return save;
 	}
 
-	private SaveObject GetSave(IMongoDatabase db, ObjectId? id, string name)
+	private SaveObject GetSave(IMongoDatabase db, string name)
 	{
-		if(id == null)
-		{
+		//if(id == null)
+		//{
 			var save = new SaveObject(name);
 			db.GetCollection<SaveObject>("Saves").InsertOne(save);
 			Saves.Add(save);
 			return save;
-		}
+		//}
 
-		return 
-			Saves.Find(s => s.Id == id)??
-			db.GetCollection<SaveObject>("Saves").Find(new BsonDocument("Id", id)).First();
+		//return 
+		//	Saves.Find(s => s.Id == id)??
+		//	db.GetCollection<SaveObject>("Saves").Find(new BsonDocument("Id", id)).First();
 	}
 
 	private ObjectId CreateNewSave(IMongoDatabase db, SaveObject save)
@@ -170,63 +176,81 @@ internal class GameMongoClient
 		}
 	}
 
-	public void Death(ObjectId? id)
-	{
-		if(id == null) return;
-
-		var client = DbClient;
-		var db = client.GetDatabase("JensEresund");
-		SaveObject? save = GetSave(db, id, string.Empty);//DeleteSave(db, id.Value);
-
-		if(save != null)
-		{
-			db.DropCollection(save.SaveCollectionName);
-			save.IsDead = true;
-			db.GetCollection<SaveObject>("Saves")
-				.UpdateOne(
-					filter: new BsonDocument("Id", save.Id), 
-					update: new BsonDocument("IsDead", true)
-					);
-		}
-	}
-
 	public bool TryLoadSave(SaveObject save, [NotNullWhen(true)] out GameLoop? game)
 	{
-		if(save.IsDead)
-		{
-			game = null;
+		game = null;
+		if(!isConnected && !EnsureCreated())
 			return false;
-		}
+
+		if(save.IsDead)
+			return false;
 
 		var client = DbClient;
 		var db = client.GetDatabase("JensEresund");
 		var level = db.GetCollection<Level>(save.SaveCollectionName).Find(new BsonDocument()).First();
 
 		LoadGameLog(save.SaveCollectionName, db);
-
+		LogCache = null;
 		game = new GameLoop(save, level);
+
 		return true;
+	}
+
+	public void SaveGameLog(string id, List<LogMessageBase> log, IMongoDatabase? db = null)
+	{
+		if(!isConnected && !EnsureCreated())
+			return;
+		//if(!MessageLog.Instance.SaveAs(id))
+		//	return;
+
+		//List<LogMessageBase> log = MessageLog.Instance.Messages;
+		db ??= DbClient.GetDatabase("JensEresund");
+
+		var logCollection = db.GetCollection<GameLogDocument>("GameLogs", new() { AssignIdOnInsert = false });
+
+		var filter = Builders<GameLogDocument>.Filter.Eq(l => l.Id, id);
+		var projection = Builders<GameLogDocument>.Projection.Include(l => l.Count);
+
+		if(logCollection.CountDocuments(emptyFilter) > 0)
+		{
+			var count = logCollection.Find(filter).Project(projection).FirstOrDefault()?["Count"].AsInt32;
+
+			if(count != null)
+			{
+				var update = Builders<GameLogDocument>.Update.Set(l => l.Count, log.Count).PushEach(l => l.Log, log.TakeLast(log.Count-count.Value));
+				logCollection.UpdateOne(filter, update);
+				return;
+			}
+		}
+		logCollection.InsertOne(new GameLogDocument(id, log.Count, log));
 	}
 
 	public void LoadGameLog(string id, IMongoDatabase? db = null)
 	{
+		if(!isConnected && !EnsureCreated())
+			return;
 		if(MessageLog.Instance.SaveName == id) return;
+		if(LogCache?.ContainsKey(id) == true)
+		{
+			MessageLog.Instance.Clear();
+			MessageLog.Instance.LoadMessageLog(LogCache[id], id);
+			return;
+		}
 
 		db ??= DbClient.GetDatabase("JensEresund");
-		var log = db.GetCollection<GameLogDocument>("GameLogs")
-			.Find(Builders<GameLogDocument>.Filter.Eq(l => l.Id, id)).First().Log;
+		var logCollection = db.GetCollection<GameLogDocument>("GameLogs", new() { AssignIdOnInsert = false });
 
-		MessageLog.Instance.LoadMessageLog(log, id);
-	}
-	private void Test()
-	{
-		var client = DbClient;
-		var db = client.GetDatabase("JensEresund");
-		var test = db.GetCollection<Snake>("TestCollection");
-
-		var snake = new Snake(new Position(1, 1), 's');
-		test.ReplaceOne(new BsonDocument("_id", 2 ), snake, new ReplaceOptions { IsUpsert = true });
-		var snakes = test.Find(new BsonDocument()).ToList();
+		if(logCollection.CountDocuments(emptyFilter) > 0)
+		{
+			var log = logCollection.Find(Builders<GameLogDocument>.Filter.Eq(l => l.Id, id)).FirstOrDefault()?.Log;
+			if(log != null)
+			{
+				(LogCache??=new()).Add(id, log);
+				MessageLog.Instance.LoadMessageLog(log, id);
+				return;
+			}
+		}
+		MessageLog.Instance.LoadMessageLog([], id);
 	}
 }
 
@@ -241,8 +265,13 @@ public class SaveObject
 	public bool IsDead { get; set; } = false;
     public int Turn { get; set; }
 
-    private readonly DateTime sessionStart = DateTime.Now;
-    public TimeSpan TimePlayed { get; private set; }
+    private DateTime sessionStart = DateTime.MinValue;
+	private TimeSpan _timePlayed;
+
+	public TimeSpan TimePlayed { 
+		get => _timePlayed; 
+		set => _timePlayed = value; 
+	}
 
 	/// <summary>
 	/// The provided name must be the name of the player character and it has to be unique.
@@ -252,7 +281,8 @@ public class SaveObject
 	{
 		Name = name;
 
-		SaveCollectionName = name + "_"+DateOnly.FromDateTime(sessionStart);
+		sessionStart = DateTime.UtcNow;
+		SaveCollectionName = name + "_"+sessionStart;
 	}
 
 	[BsonConstructor]
@@ -263,12 +293,17 @@ public class SaveObject
 		Name=name;
 		IsDead=isDead;
 		Turn=turn;
-		TimePlayed = timePlayed;
+		_timePlayed = timePlayed;
 	}
 
-	internal void EndSession()
+	public void StartSession()
 	{
-		TimePlayed = TimePlayed + (DateTime.Now - sessionStart);
+		sessionStart = DateTime.UtcNow;
+	}
+	public void StopSession()
+	{
+		_timePlayed	= _timePlayed + (sessionStart == DateTime.MinValue ? TimeSpan.Zero : (DateTime.UtcNow - sessionStart));
+		sessionStart = DateTime.MinValue;
 	}
 }
 

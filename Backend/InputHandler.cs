@@ -7,7 +7,8 @@ internal class InputHandler
     internal Task<ConsoleKeyInfo> InputListener = default!;
     private Dictionary<ConsoleKey, IInputEndpoint> _listeners = new();
     private Dictionary<ConsoleKeyInfo, IInputEndpoint> _commandListeners = new();
-    public bool ReadAllKeys { get; set; } = false;
+    private bool _readAllKeys = false;
+    private ConsoleKeyInfo? _nextKey;
 
     private bool running = false;
 
@@ -17,7 +18,8 @@ internal class InputHandler
 	}
     internal void Start()
     {
-        running = true;
+        if(running) return;
+		running = true;
 		InputListener = Task.Run(Listener);
 	}
 	private ConsoleKeyInfo Listener()
@@ -25,9 +27,18 @@ internal class InputHandler
         ConsoleKeyInfo k = default;
         while (running)
         {
-            k = Console.ReadKey(true);
+            // This makes sure the input goes to any "Console.Read*" calls first and does not take the next key after Stop is called.
+			if(Console.KeyAvailable)
+				k = Console.ReadKey(true);
+            else
+            {
+                Thread.Sleep(50);
+                continue;
+            }
             if (!running) break;
 
+            if(_readAllKeys)
+                _nextKey = k;
 			// Commands take precedence over regular keys
 			if(_commandListeners.TryGetValue(k, out var listener))
 			{
@@ -58,11 +69,18 @@ internal class InputHandler
     }
     internal ConsoleKeyInfo AwaitNextKey()
     {
-        running = false;
-        var key = InputListener.Result;
+		//running = false;
+		_nextKey = null;
+		_readAllKeys = true;
 
-        Start();
+        while(_nextKey == null)
+            Thread.Sleep(50);
 
-        return key;
+        var key = _nextKey!.Value;
+
+		//Start();
+		_readAllKeys = false;
+        _nextKey = null;
+		return key;
     }
 }

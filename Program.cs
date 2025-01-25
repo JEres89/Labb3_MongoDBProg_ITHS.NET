@@ -8,60 +8,77 @@ internal class Program
 {
 	static void Main(string[] args)
 	{
+		Console.ResetColor();
+		Console.BackgroundColor = ConsoleColor.Black;
+		Console.ForegroundColor = ConsoleColor.Gray;
+		Console.Clear();
+		var mongoClient = GameMongoClient.Instance;
 
-		string? playerName = null;
+		while(!mongoClient.EnsureCreated())
+		{
+			Console.WriteLine($"Could not connect to the database at {GameMongoClient.DbConnectionString} \nWould you like to use a different server? Y/N");
+			if(Console.ReadKey(true).Key == ConsoleKey.Y)
+			{
+				Console.WriteLine("Enter the connection string:");
+				GameMongoClient.DbConnectionString = Console.ReadLine();
+				continue;
+			}
+			else
+			{
+				break;
+			}
+		}
+		Console.CursorVisible = false;
 		while (true)
 		{
 			Console.Clear();
-			Console.ResetColor();
+			// TODO: reimplement my manual reset color method. This one does not work.
+			//Console.ResetColor();
+			Console.BackgroundColor = ConsoleColor.Black;
+			Console.ForegroundColor = ConsoleColor.Gray;
 
-			var mongoClient = GameMongoClient.Instance;
+			InputHandler.Instance.Start();
+			GameLoop? game = null;
+			var menu = new Menu();
+			menu.RegisterKeys(InputHandler.Instance);
 
-			if(!mongoClient.EnsureCreated())
+			while(game == null)
 			{
-				Console.WriteLine($"Could not connect to the database at {GameMongoClient.DbConnectionString} \nWould you like to use a different server? Y/N");
-				if(Console.ReadKey(true).Key == ConsoleKey.Y)
+				var selection = menu.Show();
+				if(selection == null)
 				{
-					Console.WriteLine("Enter the connection string:");
-					GameMongoClient.DbConnectionString = Console.ReadLine();
-					continue;
+					game = new GameLoop(1, null);
 				}
 				else
+				{
+					if(!mongoClient.TryLoadSave(selection, out game))
+					{
+						Console.WriteLine("Save could not be loaded.");
+					}
+				}
+			}
+			//InputHandler.Instance.Stop();
+			InputHandler.Instance.Clear();
+
+			game.GameStart();
+
+			int turn = game.CurrentLevel.Turn;
+			if(game.Player.IsDead)
+			{
+				//Console.ResetColor();
+				Console.BackgroundColor = ConsoleColor.Black;
+				Console.ForegroundColor = ConsoleColor.Gray;
+				Console.Write($"\n\n{game.Player.Name} died on turn {turn}.\n\nPress escape to exit or any key to play again.");
+
+				if(InputHandler.Instance.AwaitNextKey().Key == ConsoleKey.Escape)
 				{
 					break;
 				}
 			}
-
-			GameLoop? game;
-
-			if(mongoClient.Saves.Count > 0 ) 
-			{
-				var save = mongoClient.Saves[^1];
-				if(!mongoClient.TryLoadSave(save, out game))
-				{
-					game = new GameLoop(1, playerName);
-				}
-			}
-			else
-			{
-				game = new GameLoop(1, playerName);
-			}
-
-			game.GameStart();
-			playerName = game.Player.Name;
-			int turn = game.CurrentLevel.Turn;
-			if(game.Player.IsDead)
-			{
-				mongoClient.Death(game.CurrentGame);
-				Console.ResetColor();
-				Console.Write("\n\nYou died on turn " + turn + ".\n\nPress escape to exit or any key to play again.");
-			}
 			game.Clear();
-			if(InputHandler.Instance.AwaitNextKey().Key == ConsoleKey.Escape)
-			{
-				break;
-			}
 			MessageLog.Instance.Clear();
 		}
+		Console.BackgroundColor = ConsoleColor.Black;
+		Console.ForegroundColor = ConsoleColor.Gray;
 	}
 }

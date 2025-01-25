@@ -26,12 +26,16 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 			Name = value; 
 			UpdateStatusText(); } 
 	}
-	
+	private int _pHealth;
 	private int PlayerHealth { 
-		get => Health;
+		get => _pHealth;
 		set {
-			Health = value;
-			UpdateStatusText(); }
+			if(_pHealth != value)
+			{
+				_pHealth = Health = value;
+				UpdateStatusText();
+			}
+		}
 	}
 
 	[BsonIgnore]
@@ -85,7 +89,7 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 	/// <summary>
 	/// TODO: Change into a static formatstring
 	/// </summary>
-	private void UpdateStatusText()
+	protected void UpdateStatusText()
 	{
 		StatusChanged = true;
 		statusText = $"{PlayerName}: {PlayerHealth} HP, {AttackDieNum}d{AttackDieSize}+{AttackMod} ATK, {DefenseDieNum}d{DefenseDieSize}+{DefenseMod} DEF";
@@ -118,7 +122,10 @@ internal class PlayerEntity : LevelEntity, IInputEndpoint
 		}
 		else
 		{
-			Act(CurrentLevel, direction);
+			if(Act(CurrentLevel, direction))
+			{
+				PlayerHealth = Health;
+			}
 		}
 		pressedKey = default;
 		//if (HasActed)
